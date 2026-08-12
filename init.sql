@@ -1,0 +1,209 @@
+CREATE TABLE IF NOT EXISTS business_category
+(
+    business_category_id integer NOT NULL,
+    business_category_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT business_category_pkey PRIMARY KEY (business_category_id)
+)
+
+CREATE TABLE IF NOT EXISTS public.city
+(
+    city_id integer NOT NULL,
+    city_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    prefecture_id integer NOT NULL,
+    CONSTRAINT city_pkey PRIMARY KEY (city_id),
+    CONSTRAINT city_prefecture_id_fkey FOREIGN KEY (prefecture_id)
+        REFERENCES public.prefecture (prefecture_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+
+CREATE TABLE IF NOT EXISTS public.company
+(
+    company_id integer NOT NULL,
+    company_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    president_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    address character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    phone character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    description text COLLATE pg_catalog."default" NOT NULL DEFAULT ''::text,
+    industry_id integer NOT NULL,
+    ipo_type_id integer NOT NULL,
+    capital integer NOT NULL DEFAULT 0,
+    foundation_date character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    url character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    twitter_screen_name character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    CONSTRAINT company_pkey PRIMARY KEY (company_id),
+    CONSTRAINT company_industry_id_fkey FOREIGN KEY (industry_id)
+        REFERENCES public.industry (industry_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT company_ipo_type_id_fkey FOREIGN KEY (ipo_type_id)
+        REFERENCES public.ipo_type (ipo_type_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+
+CREATE TABLE IF NOT EXISTS public.industry
+(
+    industry_id integer NOT NULL,
+    industry_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT industry_pkey PRIMARY KEY (industry_id)
+)
+
+
+CREATE TABLE IF NOT EXISTS public.ipo_type
+(
+    ipo_type_id integer NOT NULL,
+    ipo_type_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT ipo_type_pkey PRIMARY KEY (ipo_type_id)
+)
+
+CREATE TABLE IF NOT EXISTS public.keyword
+(
+    keyword_id integer NOT NULL,
+    keyword_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT keyword_pkey PRIMARY KEY (keyword_id)
+)
+
+
+CREATE TABLE IF NOT EXISTS public.location_category
+(
+    location_category_id integer NOT NULL,
+    location_category_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT location_category_pkey PRIMARY KEY (location_category_id)
+)
+
+
+CREATE TABLE IF NOT EXISTS public.prefecture
+(
+    prefecture_id integer NOT NULL,
+    prefecture_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT prefecture_pkey PRIMARY KEY (prefecture_id)
+)
+
+
+CREATE TABLE IF NOT EXISTS public.release
+(
+    company_id integer NOT NULL,
+    release_id integer NOT NULL,
+    title character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    subtitle text COLLATE pg_catalog."default" NOT NULL DEFAULT ''::text,
+    lead_paragraph text COLLATE pg_catalog."default" NOT NULL DEFAULT ''::text,
+    body text COLLATE pg_catalog."default" NOT NULL,
+    main_image character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    main_image_fastly character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    youtube_url character varying(255) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
+    release_type_id integer,
+    created_at timestamp without time zone,
+    CONSTRAINT release_pkey PRIMARY KEY (company_id, release_id),
+    CONSTRAINT release_company_id_fkey FOREIGN KEY (company_id)
+        REFERENCES public.company (company_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT release_release_type_id_fkey FOREIGN KEY (release_type_id)
+        REFERENCES public.release_type (release_type_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+
+CREATE TABLE IF NOT EXISTS public.release_business_category
+(
+    company_id integer NOT NULL,
+    release_id integer NOT NULL,
+    business_category_id integer NOT NULL,
+    main_flg smallint NOT NULL,
+    CONSTRAINT release_business_category_pkey PRIMARY KEY (company_id, release_id, business_category_id, main_flg),
+    CONSTRAINT release_business_category_business_category_id_fkey FOREIGN KEY (business_category_id)
+        REFERENCES public.business_category (business_category_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT release_business_category_company_id_release_id_fkey FOREIGN KEY (company_id, release_id)
+        REFERENCES public.release (company_id, release_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+CREATE TABLE IF NOT EXISTS public.release_keyword
+(
+    company_id integer NOT NULL,
+    release_id integer NOT NULL,
+    keyword_id integer NOT NULL,
+    sort_priority integer NOT NULL DEFAULT 0,
+    CONSTRAINT release_keyword_pkey PRIMARY KEY (company_id, release_id, keyword_id),
+    CONSTRAINT release_keyword_company_id_release_id_fkey FOREIGN KEY (company_id, release_id)
+        REFERENCES public.release (company_id, release_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT release_keyword_keyword_id_fkey FOREIGN KEY (keyword_id)
+        REFERENCES public.keyword (keyword_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+CREATE TABLE IF NOT EXISTS public.release_location
+(
+    id integer NOT NULL,
+    company_id integer NOT NULL,
+    release_id integer NOT NULL,
+    prefecture_id integer,
+    city_id integer,
+    location_category_id integer,
+    CONSTRAINT release_location_pkey PRIMARY KEY (id),
+    CONSTRAINT release_location_city_id_fkey FOREIGN KEY (city_id)
+        REFERENCES public.city (city_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT release_location_company_id_release_id_fkey FOREIGN KEY (company_id, release_id)
+        REFERENCES public.release (company_id, release_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT release_location_location_category_id_fkey FOREIGN KEY (location_category_id)
+        REFERENCES public.location_category (location_category_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT release_location_prefecture_id_fkey FOREIGN KEY (prefecture_id)
+        REFERENCES public.prefecture (prefecture_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+CREATE TABLE IF NOT EXISTS public.release_statistic
+(
+    company_id integer NOT NULL,
+    release_id integer NOT NULL,
+    page_view integer NOT NULL,
+    unique_user integer NOT NULL,
+    like_count integer NOT NULL,
+    CONSTRAINT release_statistic_pkey PRIMARY KEY (company_id, release_id),
+    CONSTRAINT release_statistic_company_id_release_id_fkey FOREIGN KEY (company_id, release_id)
+        REFERENCES public.release (company_id, release_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+
+CREATE TABLE IF NOT EXISTS public.release_type
+(
+    release_type_id integer NOT NULL,
+    release_type_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT release_type_pkey PRIMARY KEY (release_type_id)
+)
+
+CREATE TABLE IF NOT EXISTS public.webclipping_list
+(
+    id integer NOT NULL,
+    company_id integer NOT NULL,
+    release_id integer NOT NULL,
+    release_url character varying(240) COLLATE pg_catalog."default",
+    clipping_url text COLLATE pg_catalog."default",
+    new_site_name character varying(240) COLLATE pg_catalog."default",
+    site_name character varying(240) COLLATE pg_catalog."default",
+    insert_date timestamp without time zone NOT NULL,
+    CONSTRAINT webclipping_list_pkey PRIMARY KEY (id),
+    CONSTRAINT webclipping_list_company_id_release_id_fkey FOREIGN KEY (company_id, release_id)
+        REFERENCES public.release (company_id, release_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
