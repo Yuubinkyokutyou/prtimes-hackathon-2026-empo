@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+.runtime/
+*.egg-info/
+.coverage
+htmlcov/
+
+# 運営配布資料・検討用Office文書は公開リポジトリへ含めない
+docs/*.pptx
+docs/*.docx

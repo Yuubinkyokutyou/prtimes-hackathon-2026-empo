@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "PR TIMES Local",
+      "Group": "Hackathon",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "prtimes",
+      "Username": "hackathon",
+      "SSLMode": "prefer"
+    }
+  }
+}

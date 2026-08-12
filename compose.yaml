@@ -1,0 +1,40 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: prtimes
+      POSTGRES_USER: hackathon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hackathon-local-only}
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hackathon -d prtimes"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - prtimes_db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+      - ./seed.sql:/docker-entrypoint-initdb.d/05_seed.sql:ro
+      - ./sql/01_search_features.sql:/docker-entrypoint-initdb.d/10_search_features.sql:ro
+      - ./sql/02_pgvector.sql:/docker-entrypoint-initdb.d/20_pgvector.sql:ro
+      - ./sql:/workspace/sql:ro
+
+  pgadmin:
+    image: dpage/pgadmin4:9.16
+    profiles: ["tools"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-demo@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-pgadmin-local-only}
+    ports:
+      - "127.0.0.1:5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+
+volumes:
+  prtimes_db:
+  pgadmin_data:

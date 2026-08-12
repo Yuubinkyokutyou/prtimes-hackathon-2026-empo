@@ -1,0 +1,205 @@
+{
+  "schema_version": "1.0",
+  "generator": "static_mock_without_openai_api",
+  "disclaimer": "ハッカソンの画面・導線確認用に作成した架空の提案です。人数、実績、日程などは公開前に各社で確認してください。",
+  "proposals": [
+    {
+      "proposal_id": "demo-900001-joint-poc",
+      "target_company_id": 900001,
+      "target_company_name": "株式会社デモ青空",
+      "source_release_key": "900001:1",
+      "source_release_title": "【架空サービス】広報AIアシスタント「SoraPress」β版を提供開始",
+      "existing_patterns": [
+        "新商品・新サービス",
+        "イベント",
+        "調査・データ"
+      ],
+      "proposed_pattern": "共同実証・参加企業数",
+      "proposed_title_draft": "広報AI「SoraPress」、中小企業30社とPR企画改善の共同実証を開始",
+      "angle": "β版の機能説明から一歩進め、実際の利用企業数と検証テーマをニュースにする。",
+      "why_this_fits": "既存PRで示した企画作成・効果測定機能を、企画決定時間や修正回数などの検証指標へ置き換えられるため。",
+      "novelty": "同社の既存3本には、顧客企業を巻き込んだ共同実証と参加社数の切り口がない。",
+      "reference_cases": [
+        {
+          "release_key": "900101:3",
+          "company_name": "株式会社ことばクラウド",
+          "title": "中小企業50社とプレスリリース改善の共同実証を開始",
+          "transferable_point": "参加企業数、検証期間、比較する指標を一つの発表にまとめる構成。"
+        }
+      ],
+      "facts_to_verify": [
+        "参加予定企業数",
+        "実証期間",
+        "比較できる業務時間または修正回数",
+        "参加企業から掲載許諾を得たコメント"
+      ],
+      "confidence": "high",
+      "status": "needs_facts"
+    },
+    {
+      "proposal_id": "demo-900002-cross-city",
+      "target_company_id": 900002,
+      "target_company_name": "合同会社まちの灯",
+      "source_release_key": "900002:1",
+      "source_release_title": "商店街を巡って楽しむ地域周遊アプリ「まちあかり」デモ版を公開",
+      "existing_patterns": [
+        "新商品・新サービス",
+        "イベント",
+        "キャンペーン"
+      ],
+      "proposed_pattern": "複数地域・複数事業者との共同企画",
+      "proposed_title_draft": "3つの商店街をつなぐ合同周遊企画、「まちあかり」で地域を越えるスタンプラリー",
+      "angle": "単独商店街のアプリ紹介ではなく、複数の地域・店舗が連携した規模と回遊ストーリーを前面に出す。",
+      "why_this_fits": "既存アプリの店舗検索とデジタルスタンプ機能を、そのまま地域横断の共同企画に転用できるため。",
+      "novelty": "既存の夜市や宿泊者キャンペーンは単一地域の催しで、地域を越えた連携数を主役にしていない。",
+      "reference_cases": [
+        {
+          "release_key": "900104:3",
+          "company_name": "株式会社ローカルリンク",
+          "title": "3市合同の地域周遊キャンペーン、特産品が当たる企画を実施",
+          "transferable_point": "自治体・商店街・観光施設の連携主体数と、地域をまたぐ達成条件をニュース化する構成。"
+        }
+      ],
+      "facts_to_verify": [
+        "参加する地域・商店街の数",
+        "参加店舗数",
+        "地域をまたぐチェックポイント設計",
+        "各連携先の掲載許諾"
+      ],
+      "confidence": "medium",
+      "status": "needs_facts"
+    },
+    {
+      "proposal_id": "demo-900003-local-collab",
+      "target_company_id": 900003,
+      "target_company_name": "株式会社みらい食研",
+      "source_release_key": "900003:1",
+      "source_release_title": "国産豆を使った植物由来スナック「MIRAI CRUNCH」新発売",
+      "existing_patterns": [
+        "新商品・新サービス",
+        "キャンペーン",
+        "調査・データ"
+      ],
+      "proposed_pattern": "地域素材との共同開発・フードロス",
+      "proposed_title_draft": "規格外の地域食材を生かした「MIRAI CRUNCH」限定味を生産者と共同開発",
+      "angle": "同じ商品の別フレーバー発表を、地域事業者との共創と未利用素材の活用という社会性のある切り口へ広げる。",
+      "why_this_fits": "国産豆・植物由来という既存商品の文脈と、地域の未利用食材を組み合わせやすいため。",
+      "novelty": "新発売、人気投票、消費者調査は発信済みだが、生産者との共同開発やフードロスの切り口は未活用。",
+      "reference_cases": [
+        {
+          "release_key": "900106:3",
+          "company_name": "株式会社やさしいテーブル",
+          "title": "規格外レモンを活用した限定フレーバーを地域事業者と共同開発",
+          "transferable_point": "規格外素材の課題、共同開発者、限定商品、購入者アンケートを一連の企画にする構成。"
+        }
+      ],
+      "facts_to_verify": [
+        "活用できる地域素材と廃棄・未利用量",
+        "共同開発先",
+        "試作または発売の可否",
+        "限定数量・販売期間"
+      ],
+      "confidence": "high",
+      "status": "needs_facts"
+    },
+    {
+      "proposal_id": "demo-900004-upcycle-outcome",
+      "target_company_id": 900004,
+      "target_company_name": "株式会社Green Loop",
+      "source_release_key": "900004:1",
+      "source_release_title": "使い終えた衣料品を回収する「Green Loop BOX」を100拠点へ拡大",
+      "existing_patterns": [
+        "新商品・新サービス",
+        "経営・提携",
+        "調査・データ"
+      ],
+      "proposed_pattern": "回収後の再製品化・循環成果",
+      "proposed_title_draft": "「Green Loop BOX」で回収したデニムが限定バッグに、循環の第1号商品を発表",
+      "angle": "回収拠点数ではなく、集めた衣料が何に生まれ変わったかを具体的な商品と数量で見せる。",
+      "why_this_fits": "既存PRですでに回収・再利用・再資源化の仕組みを説明しており、次のニュースとして循環の出口を示せるため。",
+      "novelty": "拠点拡大、物流提携、生活者調査は発信済みだが、回収素材から生まれた成果物を主役にした発信はない。",
+      "reference_cases": [
+        {
+          "release_key": "900107:3",
+          "company_name": "株式会社リウェアポート",
+          "title": "回収したデニムを再生した限定バッグ、予約販売を開始",
+          "transferable_point": "回収、仕分け、再製品化までの流れと、完成品を同時に見せる構成。"
+        }
+      ],
+      "facts_to_verify": [
+        "再製品化できる素材と回収量",
+        "製造パートナー",
+        "完成品の数量・販売または展示方法",
+        "素材由来を説明できるトレーサビリティ情報"
+      ],
+      "confidence": "high",
+      "status": "needs_facts"
+    },
+    {
+      "proposal_id": "demo-900005-challenge",
+      "target_company_id": 900005,
+      "target_company_name": "メディカルデモ株式会社",
+      "source_release_key": "900005:1",
+      "source_release_title": "毎日の健康習慣を支援するアプリ「からだノート Demo」を提供開始",
+      "existing_patterns": [
+        "新商品・新サービス",
+        "調査・データ",
+        "人物・組織"
+      ],
+      "proposed_pattern": "期間型チャレンジ・法人参加数",
+      "proposed_title_draft": "企業10社と「30日間からだリズムチャレンジ」、生活記録の継続を共同検証",
+      "angle": "アプリの機能紹介ではなく、期間、参加企業数、継続率という参加型プロジェクトの数字をニュースにする。",
+      "why_this_fits": "歩数・睡眠・食事の記録機能を、一定期間の習慣づくり企画として無理なく活用できるため。",
+      "novelty": "アプリ公開、睡眠調査、CTO就任は発信済みだが、利用者が参加する期間型チャレンジは未活用。",
+      "reference_cases": [
+        {
+          "release_key": "900109:3",
+          "company_name": "株式会社朝のリズム",
+          "title": "30日間の早寝チャレンジ、企業10社と共同実施",
+          "transferable_point": "期間、参加社数、記録項目、終了後に測る継続率を明示する構成。"
+        }
+      ],
+      "facts_to_verify": [
+        "実施期間と参加企業数",
+        "参加者への説明・同意方法",
+        "取得する記録項目と匿名化方法",
+        "医療的な効果をうたわない表現"
+      ],
+      "confidence": "medium",
+      "status": "needs_facts"
+    },
+    {
+      "proposal_id": "demo-900006-continuous-program",
+      "target_company_id": 900006,
+      "target_company_name": "一般社団法人 学びの架け橋",
+      "source_release_key": "900006:1",
+      "source_release_title": "中高生向け「地域課題アイデアソン2026」を仙台で開催",
+      "existing_patterns": [
+        "イベント",
+        "人物・組織",
+        "コンテンツ公開"
+      ],
+      "proposed_pattern": "単発イベントから継続プログラム化",
+      "proposed_title_draft": "アイデアソン参加校と地域団体をつなぐ3か月のオンライン探究プログラムを開始",
+      "angle": "開催告知で終わらせず、イベント参加者の次の学びと地域との継続的な関係を新しい事業として発表する。",
+      "why_this_fits": "既存アイデアソンの参加校、地域課題、企業・住民との接点を、月次の取材と提案改善へ発展させられるため。",
+      "novelty": "単発イベント、代表就任、ガイド公開は発信済みだが、複数月にわたる伴走プログラムは未活用。",
+      "reference_cases": [
+        {
+          "release_key": "900112:3",
+          "company_name": "一般社団法人まなび共創ネット",
+          "title": "学校と地域団体をつなぐオンライン共創プログラムを開始",
+          "transferable_point": "単発イベントを、取材・月次活動・成果発表を含む継続プログラムへ広げる構成。"
+        }
+      ],
+      "facts_to_verify": [
+        "参加を継続できる学校・生徒数",
+        "協力する企業・地域団体",
+        "プログラム期間と月次活動",
+        "成果発表と安全管理の方法"
+      ],
+      "confidence": "high",
+      "status": "needs_facts"
+    }
+  ]
+}

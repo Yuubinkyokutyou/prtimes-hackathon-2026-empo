@@ -1,1 +1,205 @@
-# チームエンポー
+# PR Compass — 根拠付きPR企画レコメンドMVP
+
+既存のプレスリリースから「内容が近い他社事例」と「まだ使っていない発信パターン」を探し、次のPRの切り口を根拠付きで3件提案するローカルWebアプリです。
+
+成果指標（PV・UU・いいね・掲載数）は参考値として表示しますが、類似順位には使いません。現在の提供データだけではインプレッションの因果分析や受け取り方・感情分析はできないため、UIでも「反響proxy」として区別しています。
+
+## MVPの流れ
+
+1. 6社の架空企業から、1社を1クリックで選択
+2. 投稿済みPRを自動で読み込み、同業・異業種の参考事例をベクトル検索
+3. 12種の事前定義パターンから、まだ使っていない切り口を3件提案
+4. 「自社の既存PR × 新しいアプローチ × 他社参考事例」と必要な社内情報を表示
+
+OpenAI APIキーがなくても、ローカル埋め込みと決定論的なダミー提案ですべての画面を試せます。提案は企画の切り口までで、本文は生成しません。
+
+## 最短起動（DB不要）
+
+Python 3.11以上で、追加パッケージなしに起動できます。
+
+```powershell
+python app.py
+```
+
+[http://127.0.0.1:8765](http://127.0.0.1:8765) を開いてください。18社・42件の架空データを使うデモモードです。
+
+別のポートを使う場合：
+
+```powershell
+python app.py --port 9000
+```
+
+## PostgreSQL＋pgvectorで起動
+
+ローカル検証用のDocker構成には、PostgreSQL 16、pgvector、提供スキーマ、架空データが含まれます。ローカル既定パスワードは開発専用です。
+
+```powershell
+docker compose up -d db
+
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[postgres]"
+
+$env:PR_DATA_MODE = "postgres"
+$env:PR_DATABASE_URL = "postgresql://hackathon:hackathon-local-only@127.0.0.1:55432/prtimes"
+$env:PR_EMBEDDING_PROVIDER = "local"
+
+.\.venv\Scripts\python.exe -m pr_recommender.indexer --provider local
+.\.venv\Scripts\python.exe app.py
+```
+
+初期データは18社・90件です。インデクサーはcanonical検索文のSHA-256を保存し、変更のないリリースを再計算しません。PostgreSQLモードではクエリベクトルだけをDBへ渡し、pgvectorで同業／異業種それぞれのexact cosine上位候補を取得してから、Python側で構造化rerankとMMRを行います。未公開・公開日時不明・未来公開のリリースはインデックス作成時と検索時の両方で除外します。
+
+Dockerの初期化SQLは空のnamed volumeにだけ実行されます。既存DBへ検索ビューの定義変更を反映する場合は、Webとindexerを止め、バックアップと権限を確認してから次を明示実行し、その後indexerを再実行してください。
+
+```powershell
+psql "$env:PR_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f sql/migrations/20260812_rebuild_search_features.sql
+.\.venv\Scripts\python.exe -m pr_recommender.indexer --provider local
+```
+
+停止：
+
+```powershell
+docker compose --profile tools down
+```
+
+## pgAdmin
+
+ローカル版を起動します。
+
+```powershell
+docker compose --profile tools up -d
+```
+
+- URL: [http://127.0.0.1:5050](http://127.0.0.1:5050)
+- pgAdminメール: `demo@example.com`
+- pgAdminパスワード: `pgadmin-local-only`
+- 登録済みサーバー: `PR TIMES Local`
+- DB: `prtimes`
+- DBユーザー: `hackathon`
+- DBパスワード: `hackathon-local-only`
+
+提供AWS環境では、許可された社員／ゲストWi-Fiから運営配布のチーム別pgAdmin URLへアクセスします。PPTで確認できる値はDB名 `prtimes`、ユーザー `hackathon`、ポート `5432` までです。RDSホスト、DBパスワード、pgAdmin認証情報は運営配布値を使い、リポジトリへ保存しないでください。
+
+接続後はまず次を確認します。
+
+```sql
+SELECT version();
+SELECT extversion FROM pg_extension WHERE extname = 'vector';
+SELECT count(*) FROM company;
+SELECT count(*) FROM release;
+SELECT count(*) FROM pr_ai.release_search_features;
+SELECT count(*) FROM pr_ai.release_embedding;
+```
+
+## OpenAI API（任意）
+
+APIキーに加えて生成プロバイダーを明示的に切り替えると、企画案生成にResponses APIのstrict JSON Schemaを利用します。APIキーが環境にあるだけでは外部送信しません。埋め込みもOpenAIへ切り替える場合だけ `PR_EMBEDDING_PROVIDER=openai` を指定します。
+
+```powershell
+$env:OPENAI_API_KEY = "運営配布キー"
+$env:PR_GENERATION_PROVIDER = "openai"
+$env:OPENAI_GENERATION_MODEL = "gpt-4o-mini"
+$env:OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+
+# OpenAI埋め込みへ切り替える場合のみ
+$env:PR_EMBEDDING_PROVIDER = "openai"
+.\.venv\Scripts\python.exe -m pr_recommender.indexer --provider openai
+```
+
+APIキーは`.env`、ソース、PowerPoint、ログへ入れないでください。公開済みPR本文だけを外部APIへ送る想定です。明示的にOpenAIを選んだ状態でAPIが失敗した場合は、ローカル生成へ偽装せずエラーを返します。`PR_GENERATION_PROVIDER=local`へ戻せば通信なしの決定論的生成を利用できます。Responses APIには`store: false`を設定します。
+
+## 類似検索の定義
+
+検索本文はタイトル、サブタイトル、リード、本文、カテゴリ、キーワードから作ります。会社規模や成果値を本文へ混ぜず、構造特徴や参考指標として分離します。
+
+再ランキングの初期重み：
+
+| 特徴 | 重み |
+|---|---:|
+| 意味類似 | 0.55 |
+| 同業種 | 0.15 |
+| ビジネスカテゴリJaccard | 0.10 |
+| キーワードJaccard | 0.08 |
+| リリース種別一致 | 0.07 |
+| 公開月の近さ | 0.05 |
+
+自社事例、公開日未設定、未来の事例は除外します。同一企業や同じ切り口が並びすぎないようMMRで多様化します。`page_view`、`unique_user`、`like_count`、Web掲載数は同一条件内の反響proxyとして表示するだけで、検索スコアには加算しません。
+
+## API
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/health` | ヘルスチェック |
+| GET | `/api/bootstrap` | モード・企業一覧 |
+| POST | `/api/recommendations` | 企業履歴から未活用の切り口を3件提案 |
+| POST | `/api/search` | 類似事例検索 |
+| POST | `/api/ideas` | 根拠付き企画案生成 |
+| POST | `/api/plan` | 12か月計画生成 |
+
+POSTの共通入力例：
+
+```json
+{
+  "company_id": 900001,
+  "goal": "新サービスの認知獲得",
+  "facts": [
+    "9月に新機能のベータ版を公開できる",
+    "利用企業のコメントを取得予定"
+  ],
+  "desired_month": 9,
+  "mode": "balanced"
+}
+```
+
+`mode` は `balanced`、`same_industry`、`cross_industry` のいずれかです。`/api/ideas` には検索結果の `release_key` を `selected_release_keys` として追加します。応答の`idea_set_id`は入力・参考事例・企画案のスナップショットIDです。`/api/plan`には同じ`idea_set_id`と`selected_release_keys`、任意の`start_year_month`（`YYYY-MM`）・`confirmed_months`を渡します。確定月を送らなければ、次の12か月はすべてPreparationになります。
+
+## 環境変数
+
+`.env.example` は値の見本です。このMVPは`.env`を自動読込しないため、PowerShellの`$env:`または実行環境のSecret管理で設定してください。
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `PR_DATA_MODE` | `auto` | `auto` / `demo` / `postgres` |
+| `PR_DATABASE_URL` | 未設定 | PostgreSQL接続URL |
+| `PR_EMBEDDING_PROVIDER` | `local` | `local` / `openai` |
+| `PR_GENERATION_PROVIDER` | `local` | `local` / `openai`。外部送信は明示指定時のみ |
+| `PR_HOST` | `127.0.0.1` | Web待受ホスト |
+| `PR_PORT` | `8765` | Web待受ポート |
+| `OPENAI_API_KEY` | 未設定 | 任意。生成・埋め込み用 |
+| `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | 企画案生成モデル |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 埋め込みモデル |
+
+## 検証
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+node --check web\app.js
+```
+
+主な受入条件は、自社事例除外100%、同業／異業種各3件、すべての企画案に既存リリースの複合キー、年間12項目、確認月以外をPreparation扱い、API入力エラーの構造化応答です。
+
+## ファイル構成
+
+```text
+app.py                         Web起動入口
+init.sql                      提供スキーマ（DDL）
+seed.sql                      ローカル専用の架空データ
+src/pr_recommender/            検索・生成・計画・HTTPサービス
+web/                           依存なしのブラウザUI
+sql/00_preflight.sql           接続・データ監査
+sql/01_search_features.sql     集約検索ビュー
+sql/02_pgvector.sql            vector拡張・埋め込み表
+sql/03_hnsw_optional.sql       大規模化時の任意HNSW索引
+sql/migrations/                既存DB向けの明示マイグレーション
+compose.yaml                   PostgreSQL / pgAdminローカル環境
+docs/IMPLEMENTATION_GUIDE.md   詳細な設計・運用ガイド
+```
+
+## 既知の制約
+
+- 提供スキーマにはインプレッション、CTR、滞在、日次推移、SNS反応本文がないため、因果的な改善提案や感情分析は未対応です。
+- 年間計画は入力した社内事実の範囲で作ります。素材がない月は事実を捏造せずPreparationにします。
+- ローカル特徴ハッシュは短期デモ向けです。本番精度は評価セットを作り、OpenAI埋め込みまたは日本語埋め込みモデルと重みを比較してください。
+- 生成物は原文コピーではなく企画構造へ抽象化し、人間の広報担当による確認を前提とします。
+
+まず全体像を把握する場合は [仕組みの簡単な説明](docs/HOW_IT_WORKS.md) を参照してください。詳細は [MVP仕様・要件定義](docs/MVP_SPEC.md) と [実装・運用ガイド](docs/IMPLEMENTATION_GUIDE.md) に記載しています。

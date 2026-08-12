@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pr-planning-recommender"
+version = "0.1.0"
+description = "既存プレスリリースから根拠付きPR企画と年間計画を提案するMVP"
+readme = "README"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4"]
+
+[project.scripts]
+pr-recommender = "pr_recommender.web:main"
+pr-index-embeddings = "pr_recommender.indexer:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

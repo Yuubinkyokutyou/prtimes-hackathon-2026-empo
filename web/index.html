@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="投稿済みプレスリリースから、次の発信の切り口を提案するデモ">
+    <title>PR Compass | 次のPRネタを見つける</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="PR Compass ホーム">
+        <span class="brand-mark">P</span>
+        <span><strong>PR Compass</strong><small>PRESS RELEASE ANGLE FINDER</small></span>
+      </a>
+    </header>
+
+    <main>
+      <section id="login-view" class="login-view">
+        <div class="hero-copy">
+          <p class="eyebrow">ONE CLICK PR DISCOVERY</p>
+          <h1>次のPRネタ、<br><span>過去の発信</span>から見つかる。</h1>
+          <p class="hero-lead">投稿済みのプレスリリースと他社事例をベクトル検索。まだ試していない発信の切り口だけを、根拠付きで3つ提案します。</p>
+          <div class="flow" aria-label="サービスの流れ">
+            <span><b>01</b>企業を選ぶ</span><i>→</i><span><b>02</b>自動で比較</span><i>→</i><span><b>03</b>切り口を発見</span>
+          </div>
+        </div>
+
+        <div class="login-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">DEMO LOGIN</p><h2>企業を選んでログイン</h2></div>
+            <span>1 CLICK</span>
+          </div>
+          <p class="panel-note">すべてハッカソン用の架空企業です。認証情報の入力は必要ありません。</p>
+          <div id="account-list" class="account-list" aria-live="polite">
+            <div class="account-skeleton"></div><div class="account-skeleton"></div><div class="account-skeleton"></div>
+          </div>
+          <div id="bootstrap-error" class="inline-error" role="alert" hidden>
+            <span>企業データを読み込めませんでした。</span>
+            <button id="retry-button" type="button">再読み込み</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="dashboard-view" class="dashboard" hidden>
+        <div class="dashboard-head">
+          <div>
+            <button id="back-button" class="back-button" type="button">← 企業を選び直す</button>
+            <h1 id="company-name"></h1>
+          </div>
+        </div>
+
+        <section class="release-history" aria-labelledby="release-history-title">
+          <p class="eyebrow">PAST RELEASES</p>
+          <h2 id="release-history-title">これまで投稿したプレスリリース</h2>
+          <div id="own-releases" class="own-releases"></div>
+        </section>
+
+        <section class="recommendation-section" aria-labelledby="recommendation-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">NEXT RELEASE IDEAS</p><h2 id="recommendation-title">次に出せそうなプレスリリース</h2></div>
+          </div>
+          <div id="recommendation-list" class="recommendation-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="loading" class="loading" hidden aria-live="polite" aria-busy="true">
+      <div><span class="spinner"></span><strong>過去の発信を分析中</strong><p>似ている他社事例と、未活用パターンを照合しています。</p></div>
+    </div>
+    <div id="toast" class="toast" role="alert" hidden><span></span><button type="button" aria-label="閉じる">×</button></div>
+
+    <footer><span>PR Compass — Hackathon MVP</span><span>架空データのみ使用</span></footer>
+  </body>
+</html>
