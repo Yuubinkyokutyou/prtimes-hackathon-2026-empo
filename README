@@ -93,7 +93,7 @@ SELECT count(*) FROM pr_ai.release_embedding;
 
 ## OpenAI API（任意）
 
-APIキーに加えて生成プロバイダーを明示的に切り替えると、企画案生成にResponses APIのstrict JSON Schemaを利用します。APIキーが環境にあるだけでは外部送信しません。埋め込みもOpenAIへ切り替える場合だけ `PR_EMBEDDING_PROVIDER=openai` を指定します。
+APIキーに加えて生成プロバイダーを明示的に切り替えると、メイン画面のパターン選択にResponses APIのstrict JSON Schemaを利用します。OpenAIはサーバーが許可した候補IDから3件と選定理由だけを返し、本文は生成しません。APIキーが環境にあるだけでは外部送信しません。埋め込みもOpenAIへ切り替える場合だけ `PR_EMBEDDING_PROVIDER=openai` を指定します。
 
 ```powershell
 $env:OPENAI_API_KEY = "運営配布キー"
@@ -106,7 +106,7 @@ $env:PR_EMBEDDING_PROVIDER = "openai"
 .\.venv\Scripts\python.exe -m pr_recommender.indexer --provider openai
 ```
 
-APIキーは`.env`、ソース、PowerPoint、ログへ入れないでください。公開済みPR本文だけを外部APIへ送る想定です。明示的にOpenAIを選んだ状態でAPIが失敗した場合は、ローカル生成へ偽装せずエラーを返します。`PR_GENERATION_PROVIDER=local`へ戻せば通信なしの決定論的生成を利用できます。Responses APIには`store: false`を設定します。
+APIキーはGit管理下のソース、PowerPoint、ログへ入れないでください。ローカル開発ではGit除外済みの`.env`に保存できます。公開済みPRの候補情報だけを外部APIへ送る想定です。明示的にOpenAIを選んだ状態でAPIが失敗した場合は、ローカル生成へ偽装せずエラーを返します。`PR_GENERATION_PROVIDER=local`へ戻せば通信なしの決定論的生成を利用できます。Responses APIには`store: false`を設定します。
 
 ## 類似検索の定義
 
@@ -155,7 +155,7 @@ POSTの共通入力例：
 
 ## 環境変数
 
-`.env.example` は値の見本です。このMVPは`.env`を自動読込しないため、PowerShellの`$env:`または実行環境のSecret管理で設定してください。
+`.env.example` は値の見本です。プロジェクト直下のGit除外済み`.env`はWebサーバー起動時に自動読込されます。既存のOS／プロセス環境変数がある場合は、そちらが優先されます。
 
 | 変数 | 既定値 | 説明 |
 |---|---|---|

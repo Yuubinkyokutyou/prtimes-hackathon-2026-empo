@@ -22,6 +22,7 @@ from .repository import (
 )
 from .recommendations import RecommendationEngine
 from .search import SearchEngine
+from .selection import selector_from_env
 
 
 def _as_company_id(value: object) -> int:
@@ -79,6 +80,7 @@ class ApplicationService:
             repository,
             search_engine,
             data_mode=data_mode,
+            selector=selector_from_env(),
         )
         self._idea_cache: dict[tuple[Any, ...], tuple[Idea, ...]] = {}
         self._idea_sets: dict[str, tuple[SearchContext, tuple[Idea, ...], tuple[str, ...]]] = {}

@@ -111,6 +111,7 @@ function renderDashboard(data) {
           <span>掛け合わせると</span>
           <h3>${escapeHtml(item.proposal_title)}</h3>
           <p>${escapeHtml(item.angle)}</p>
+          <p class="selection-reason"><b>選定理由：</b>${escapeHtml(item.why_applicable)}</p>
         </div>
       </div>`;
     elements.recommendationList.append(article);

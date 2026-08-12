@@ -11,6 +11,12 @@ from .models import Release, SearchContext
 from .pattern_catalog import PATTERN_CATALOG, PRPattern
 from .repository import ReleaseRepository
 from .search import SearchEngine
+from .selection import (
+    LocalPatternSelector,
+    PatternSelector,
+    SelectionCandidate,
+    SelectionContext,
+)
 
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -74,10 +80,12 @@ class RecommendationEngine:
         search_engine: SearchEngine,
         *,
         data_mode: str,
+        selector: PatternSelector | None = None,
     ) -> None:
         self.repository = repository
         self.search_engine = search_engine
         self.data_mode = data_mode
+        self.selector = selector or LocalPatternSelector()
 
     def recommend(self, company_id: int, *, limit: int = 3) -> dict[str, Any]:
         company = self.repository.get_company(company_id)
@@ -158,21 +166,49 @@ class RecommendationEngine:
             ranked.append((total, pattern, reference, anchor))
 
         ranked.sort(key=lambda item: (-item[0], item[1].pattern_id))
-        selected: list[tuple[float, PRPattern, Any, Release]] = []
-        selected_families: set[str] = set()
+        family_candidates: list[tuple[float, PRPattern, Any, Release]] = []
+        candidate_families: set[str] = set()
         for item in ranked:
-            if item[1].family in selected_families:
+            if item[1].family in candidate_families:
                 continue
-            selected.append(item)
-            selected_families.add(item[1].family)
-            if len(selected) >= limit:
-                break
-        if not selected:
+            family_candidates.append(item)
+            candidate_families.add(item[1].family)
+        if len(family_candidates) < limit:
             raise ValueError("未活用パターンに紐づく参考事例を見つけられませんでした")
 
+        selection_candidates = tuple(
+            SelectionCandidate(
+                candidate_id=pattern.pattern_id,
+                pattern=pattern.name,
+                family=pattern.family,
+                description=pattern.description,
+                source_release_title=anchor.title,
+                reference_company_name=reference.release.company_name,
+                reference_release_title=reference.release.title,
+                semantic_similarity=round(reference.semantic_similarity, 4),
+                local_score=round(total, 4),
+            )
+            for total, pattern, reference, anchor in family_candidates
+        )
+        decisions = self.selector.select(
+            selection_candidates,
+            SelectionContext(
+                company_name=company.name,
+                industry=company.industry,
+                company_description=company.description,
+                own_release_titles=tuple(release.title for release in own_releases),
+            ),
+            limit=limit,
+        )
+        ranked_by_id = {item[1].pattern_id: item for item in family_candidates}
+        selected = [
+            (*ranked_by_id[decision.candidate_id], decision.rationale)
+            for decision in decisions
+        ]
+
         proposals = [
-            self._proposal(total, pattern, reference, anchor, index)
-            for index, (total, pattern, reference, anchor) in enumerate(selected, start=1)
+            self._proposal(total, pattern, reference, anchor, index, rationale)
+            for index, (total, pattern, reference, anchor, rationale) in enumerate(selected, start=1)
         ]
         return {
             "company": company.to_dict(),
@@ -183,14 +219,21 @@ class RecommendationEngine:
                 "catalog_size": len(PATTERN_CATALOG),
                 "candidate_count": len(similar),
                 "vector_search": "pgvector cosine" if self.data_mode == "postgres" else "local vector demo",
-                "selection_provider": "dummy-local",
+                "selection_provider": self.selector.provider,
             },
             "own_releases": [_release_summary(release) for release in own_releases],
             "recommendations": proposals,
         }
 
     @staticmethod
-    def _proposal(total: float, pattern: PRPattern, reference: Any, anchor: Release, rank: int):
+    def _proposal(
+        total: float,
+        pattern: PRPattern,
+        reference: Any,
+        anchor: Release,
+        rank: int,
+        rationale: str,
+    ):
         reference_release = reference.release
         compact_title = re.sub(r"^[【\[].+?[】\]]", "", anchor.title).strip()
         if len(compact_title) > 42:
@@ -202,10 +245,7 @@ class RecommendationEngine:
             "family": pattern.family,
             "proposal_title": f"「{compact_title}」を起点に、{pattern.name}で再発信",
             "angle": pattern.description,
-            "why_applicable": (
-                f"自社の既存発表と内容が近い他社事例に、まだ自社で使っていない"
-                f"「{pattern.family}」の構造を組み合わせられます。"
-            ),
+            "why_applicable": rationale,
             "required_facts": list(pattern.required_facts),
             "source_release": _release_summary(anchor),
             "reference_release": {

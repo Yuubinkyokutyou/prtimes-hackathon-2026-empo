@@ -24,6 +24,7 @@ class ApplicationServiceTests(unittest.TestCase):
                 "PR_DATA_MODE": "auto",
                 "PR_DATABASE_URL": "",
                 "PR_EMBEDDING_PROVIDER": "local",
+                "PR_GENERATION_PROVIDER": "local",
                 "OPENAI_API_KEY": "",
             },
             clear=False,
@@ -52,6 +53,7 @@ class ApplicationServiceTests(unittest.TestCase):
         self.assertEqual(payload["company"]["company_id"], 900001)
         self.assertEqual(payload["analysis"]["release_count"], 3)
         self.assertEqual(payload["analysis"]["catalog_size"], 12)
+        self.assertEqual(payload["analysis"]["selection_provider"], "local")
         self.assertEqual(len(payload["recommendations"]), 3)
         used = set(payload["analysis"]["used_patterns"])
         families = set()

@@ -211,6 +211,8 @@ PostgreSQLモードでも、構造化rerank、成果proxy、対象企業の過�
 | `src/pr_recommender/embeddings.py` | ローカルhashingと任意のOpenAI Embeddings |
 | `src/pr_recommender/search.py` | デモ/DB候補抽出、固定重みrerank、成果proxy、MMR |
 | `src/pr_recommender/generation.py` | 既定のローカル3案生成と、明示opt-inのOpenAI Responses生成 |
+| `src/pr_recommender/selection.py` | メイン画面向けのローカル／OpenAIパターン選択。候補IDをstrict schemaで検証 |
+| `src/pr_recommender/env.py` | Git除外済み`.env`の依存なし・非上書き読込 |
 | `src/pr_recommender/planner.py` | 12か月計画と未確定月の準備タスク |
 | `src/pr_recommender/indexer.py` | 検索用materialized view更新と`pr_ai.release_embedding`への差分投入 |
 | `sql/` | 監査、検索用materialized view、pgvector exact検索、任意HNSW |
@@ -238,7 +240,7 @@ PostgreSQLモードでも、構造化rerank、成果proxy、対象企業の過�
 | `OPENAI_BASE_URL` | 既定`https://api.openai.com/v1`。各クライアントが`/embeddings`または`/responses`を補う |
 | `PR_HOST` / `PR_PORT` | Web待受の既定値。`127.0.0.1` / `8765` |
 
-アプリケーションは`.env`を自動読み込みしません。PowerShellの`$env:...`、OSの環境設定、プロセスマネージャー等で値を渡してください。`PR_HOST`と`PR_PORT`はCLI引数を省略したときの既定値であり、`--host`と`--port`を指定すればそちらが優先されます。Docker Composeはプロジェクト直下の`.env`を変数展開に使用します。
+Webサーバーはプロジェクト直下のGit除外済み`.env`を起動時に自動読み込みします。OSの環境変数、PowerShellの`$env:...`、プロセスマネージャー等ですでに指定された値は上書きしません。`PR_HOST`と`PR_PORT`はCLI引数を省略したときの既定値であり、`--host`と`--port`を指定すればそちらが優先されます。Docker Composeもプロジェクト直下の`.env`を変数展開に使用します。
 
 ## 6. 起動・接続手順
 
@@ -415,9 +417,9 @@ ssh -i "{{SSH_KEY_PATH}}" -L 8765:127.0.0.1:8765 "{{EC2_SSH_USER}}@{{EC2_SSH_HOS
 
 提供PPTのスライド4では、各チームにOpenAI API Keyを1つ発行し、プロダクトまたはCoding Agentに利用できるとされています。1キーあたり$50の利用上限が設定されていますが、上限到達時はメンターへ相談して引き上げ可能と説明されています。実際のキーはPPT内にはありません。
 
-本MVPはOpenAIなしで完全に動作します。利用する場合は、秘密値をGitへ入れずプロセス環境へ設定します。
+本MVPはOpenAIなしでも動作します。利用する場合は、秘密値をGitへ入れず、プロセス環境またはGit除外済み`.env`へ設定します。
 
-企画3案だけをOpenAI Responsesで生成する設定は次のとおりです。
+メイン画面の企画候補3案をOpenAI Responsesで選択する設定は次のとおりです。
 
 ```powershell
 $env:OPENAI_API_KEY = '{{OPENAI_API_KEY}}'
@@ -429,13 +431,13 @@ $env:OPENAI_GENERATION_MODEL = 'gpt-4o-mini'
 
 - 既定の`PR_GENERATION_PROVIDER=local`は、キーの有無にかかわらず外部通信しない決定的生成を使う。
 - `OPENAI_API_KEY`を設定しただけでは企画データを送信しない。`PR_GENERATION_PROVIDER=openai`の明示指定が必要。
-- Responses APIの失敗、拒否、タイムアウト、形式不正はローカル生成へフォールバックしない。生成処理を失敗として扱い、Web APIは500、UIはエラー状態を表示する。詳細はサーバーログで確認し、ローカル生成へ戻す場合は明示的に`PR_GENERATION_PROVIDER=local`へ変更する。
+- Responses APIの失敗、拒否、タイムアウト、形式不正はローカル生成へフォールバックしない。メイン画面の推薦APIは502と安全なメッセージを返し、UIはエラー状態を表示する。ローカル選択へ戻す場合は明示的に`PR_GENERATION_PROVIDER=local`へ変更する。
 - 不正な`PR_GENERATION_PROVIDER`は入力設定エラーになる。
 - Responsesリクエストはstrict JSON Schemaを使い、`store:false`を指定する。
 - `OPENAI_BASE_URL`の末尾に`/responses`を補い、`OPENAI_GENERATION_MODEL`を利用する。
 - アプリは$50上限の監視、使用量表示、キーごとの課金制御を行わない。
 
-OpenAI企画生成では、最大12件の参考リリースから、タイトル、サブタイトル、リード、本文抜粋と安全なメタデータを送信します。ユーザーが入力した発表可能事実も`target_input_claims_unverified`として未検証扱いにします。参考本文を「信頼しないデータ」と明示し、許可された複合キーだけを根拠にできるstrict schemaで検証します。別企業の文章、数値、日付、実績、顧客名を対象企業の事実へ転用することは禁止しています。
+メイン画面のOpenAI選択では、対象企業の基本情報と過去PRタイトル、サーバーが絞った候補のパターン説明、自社・他社PRタイトル、類似度だけを送信します。本文は送信しません。全文字列を「信頼しないデータ」と明示し、許可された候補IDと選定理由だけを返せるstrict schemaで検証します。別企業の文章、数値、日付、実績、顧客名を対象企業の事実へ転用することは禁止しています。旧`/api/ideas`を直接使う場合は、最大12件の参考リリース本文抜粋も送信対象です。
 
 検索ベクトルもOpenAIにする場合だけ、別途次を設定します。
 

@@ -14,6 +14,8 @@ from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
 from .service import ApplicationService, build_service
+from .env import load_env_file
+from .selection import PatternSelectionError
 
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
@@ -162,6 +164,12 @@ class RecommenderRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.BAD_REQUEST,
                 "invalid_request",
                 str(exc) or "入力内容を確認してください。",
+            )
+        except PatternSelectionError as exc:
+            self._send_api_error(
+                HTTPStatus.BAD_GATEWAY,
+                "openai_selection_failed",
+                str(exc),
             )
         except Exception as exc:  # pragma: no cover - last-resort API boundary
             self.log_error("service error: %s", exc)
@@ -350,6 +358,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_env_file(PROJECT_ROOT / ".env")
     args = parse_args(argv)
     service = build_service()
     server = create_server(
