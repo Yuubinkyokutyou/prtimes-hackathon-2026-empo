@@ -122,9 +122,21 @@ const releaseSelect = `
     r.created_at,
     rs.page_view,
     rs.like_count,
-    MAX(w.release_url) AS source_url,
+    (
+      SELECT MAX(w.release_url)
+      FROM webclipping_list AS w
+      WHERE w.company_id = r.company_id
+        AND w.release_id = r.release_id
+    ) AS source_url,
     COALESCE(
-      array_agg(DISTINCT k.keyword_name) FILTER (WHERE k.keyword_name IS NOT NULL),
+      (
+        SELECT array_agg(DISTINCT k.keyword_name)
+        FROM release_keyword AS rk
+        INNER JOIN keyword AS k ON k.keyword_id = rk.keyword_id
+        WHERE rk.company_id = r.company_id
+          AND rk.release_id = r.release_id
+          AND k.keyword_name IS NOT NULL
+      ),
       ARRAY[]::varchar[]
     ) AS keywords
   FROM release AS r
@@ -132,11 +144,6 @@ const releaseSelect = `
   LEFT JOIN release_type AS rt ON rt.release_type_id = r.release_type_id
   LEFT JOIN release_statistic AS rs
     ON rs.company_id = r.company_id AND rs.release_id = r.release_id
-  LEFT JOIN release_keyword AS rk
-    ON rk.company_id = r.company_id AND rk.release_id = r.release_id
-  LEFT JOIN keyword AS k ON k.keyword_id = rk.keyword_id
-  LEFT JOIN webclipping_list AS w
-    ON w.company_id = r.company_id AND w.release_id = r.release_id
 `;
 
 export class PostgresRecommendationContextProvider implements RecommendationContextProvider {
@@ -169,10 +176,6 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
         WHERE r.company_id = $1
           AND r.created_at IS NOT NULL
           AND r.created_at <= CURRENT_TIMESTAMP
-        GROUP BY
-          r.company_id, c.company_name, r.release_id, r.title, r.subtitle,
-          r.lead_paragraph, r.body, rt.release_type_name, r.created_at,
-          rs.page_view, rs.like_count
         ORDER BY r.created_at DESC
         LIMIT 50`,
         [numericCompanyId],
@@ -182,10 +185,6 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
         WHERE r.company_id <> $1
           AND r.created_at IS NOT NULL
           AND r.created_at <= CURRENT_TIMESTAMP
-        GROUP BY
-          r.company_id, c.company_name, r.release_id, r.title, r.subtitle,
-          r.lead_paragraph, r.body, rt.release_type_name, r.created_at,
-          rs.page_view, rs.like_count
         ORDER BY COALESCE(rs.page_view, 0) DESC, r.created_at DESC
         LIMIT 120`,
         [numericCompanyId],
