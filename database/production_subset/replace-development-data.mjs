@@ -97,26 +97,37 @@ for (const [, fileName, expectedHeader] of files) {
   }
 }
 
-const containerId = runDocker(['compose', 'ps', '-q', 'db'], { capture: true });
+const requestedContainer = process.env.PRODUCTION_SUBSET_DB_CONTAINER?.trim();
+const containerId = requestedContainer ?? runDocker(['compose', 'ps', '-q', 'db'], { capture: true });
 if (!containerId) {
-  throw new Error('The Docker Compose db service is not running. Run `docker compose up -d db` first.');
+  throw new Error(
+    'The Docker Compose db service is not running. Run `docker compose up -d db` first, or set PRODUCTION_SUBSET_DB_CONTAINER to the development DB container name.',
+  );
 }
 
-const dbUser = runDocker(['compose', 'exec', '-T', 'db', 'printenv', 'POSTGRES_USER'], { capture: true });
-const dbName = runDocker(['compose', 'exec', '-T', 'db', 'printenv', 'POSTGRES_DB'], { capture: true });
+function runInDatabase(arguments_, options = {}) {
+  return requestedContainer
+    ? runDocker(['exec', '-i', containerId, ...arguments_], options)
+    : runDocker(['compose', 'exec', '-T', 'db', ...arguments_], options);
+}
+
+if (requestedContainer) {
+  const running = runDocker(['inspect', '--format', '{{.State.Running}}', containerId], { capture: true });
+  if (running !== 'true') throw new Error(`Database container ${containerId} is not running.`);
+}
+
+const dbUser = runInDatabase(['printenv', 'POSTGRES_USER'], { capture: true });
+const dbName = runInDatabase(['printenv', 'POSTGRES_DB'], { capture: true });
 const tempDirectory = `/tmp/production-subset-${Date.now()}-${process.pid}`;
 const tempFiles = files.map(([, fileName]) => `${tempDirectory}/${fileName}`);
 
 function runPsql(sql) {
-  runDocker(
-    ['compose', 'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', dbUser, '-d', dbName],
-    { input: sql },
-  );
+  runInDatabase(['psql', '-v', 'ON_ERROR_STOP=1', '-U', dbUser, '-d', dbName], { input: sql });
 }
 
 try {
   console.log(`CSV directory: ${csvDirectory}`);
-  runDocker(['compose', 'exec', '-T', 'db', 'mkdir', '-p', tempDirectory]);
+  runInDatabase(['mkdir', '-p', tempDirectory]);
 
   for (const [, fileName] of files) {
     runDocker(['cp', path.join(csvDirectory, fileName), `${containerId}:${tempDirectory}/${fileName}`]);
@@ -135,8 +146,8 @@ try {
 } finally {
   if (containerId) {
     try {
-      runDocker(['compose', 'exec', '-T', 'db', 'rm', '-f', ...tempFiles]);
-      runDocker(['compose', 'exec', '-T', 'db', 'rmdir', tempDirectory]);
+      runInDatabase(['rm', '-f', ...tempFiles]);
+      runInDatabase(['rmdir', tempDirectory]);
     } catch (error) {
       console.warn(`Temporary CSV cleanup failed: ${error.message}`);
     }

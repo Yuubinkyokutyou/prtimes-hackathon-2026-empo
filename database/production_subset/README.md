@@ -13,6 +13,12 @@ Docker ComposeのDBが起動している状態で、リポジトリルートか�
 npm run db:replace-production-subset -- --yes
 ```
 
+Compose管理外の開発DBコンテナを使う場合は、対象を明示できます。
+
+```bash
+PRODUCTION_SUBSET_DB_CONTAINER=team-empo-db npm run db:replace-production-subset -- --yes
+```
+
 このコマンドはCSVの存在とヘッダーを確認し、ステージングへ取り込んで主キー・外部キーを検証します。検証に成功した場合だけ、開発DBの15テーブルを空にしてCSVの内容へ置き換えます。削除と再投入は同一トランザクションのため、途中で失敗した場合は元のデータへロールバックされます。
 
 > **注意:** `--yes` は既存の開発データ（ダミーデータを含む）をすべて削除する確認オプションです。本番DBに接続するCompose設定では実行しないでください。
