@@ -5,7 +5,7 @@ pg_dumpを使わず、直近1年のデータを各テーブル最大1,000件に�
 
 ## 開発DBをCSVの内容へ完全に置き換える（推奨）
 
-抽出済みの15個のCSVはローカルの `database/production_subset/csv/` に配置します。本番由来情報を含むため、このディレクトリはGit管理対象外です。
+このリポジトリでは、抽出済みの15個のCSVを `database/production_subset/csv/` で管理しています。
 
 Docker ComposeのDBが起動している状態で、リポジトリルートから次を実行します。
 
