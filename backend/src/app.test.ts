@@ -3,9 +3,11 @@ import { after, before, test } from 'node:test';
 
 process.env.DATABASE_URL ??= 'postgresql://unused:unused@localhost:5432/unused';
 process.env.NODE_ENV = 'test';
+process.env.OPENAI_API_KEY = '';
 
 const { app } = await import('./app.js');
 const { closePool } = await import('./db.js');
+const { classifyPostingCadence } = await import('./recommendations.js');
 
 let server: ReturnType<typeof app.listen>;
 let baseUrl: string;
@@ -81,4 +83,17 @@ test('POST /api/recommendations/generate falls back safely without an API key', 
   assert.equal(response.status, 200);
   const data = (await response.json()) as { meta: { mode: string } };
   assert.equal(data.meta.mode, 'demo');
+});
+
+test('posting cadence prioritizes the left panel after 60 days and a new angle for recent posts', () => {
+  const now = Date.parse('2026-08-13T00:00:00.000Z');
+
+  assert.deepEqual(
+    classifyPostingCadence([{ publishedAt: '2026-06-14T00:00:00.000Z' }], 60, now),
+    { daysSinceLastPublished: 60, recommendedFocus: 'existing' },
+  );
+  assert.deepEqual(
+    classifyPostingCadence([{ publishedAt: '2026-08-08T00:00:00.000Z' }], 60, now),
+    { daysSinceLastPublished: 5, recommendedFocus: 'new' },
+  );
 });

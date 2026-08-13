@@ -69,8 +69,10 @@ export type RecommendationDashboard = {
   meta: {
     generatedAt: string;
     mode: 'demo' | 'openai';
-    dataSource: 'database' | 'mock';
+    dataSource: 'production_subset' | 'database' | 'mock';
     similarityMethod: string;
+    recommendedFocus: 'existing' | 'new';
+    daysSinceLastPublished: number | null;
   };
 };
 

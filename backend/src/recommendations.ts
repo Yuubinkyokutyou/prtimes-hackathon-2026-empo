@@ -4,6 +4,7 @@ import {
   CompanyNotFoundError,
   PostgresRecommendationContextProvider,
 } from './recommendationRepository.js';
+import { ProductionSubsetRecommendationContextProvider } from './productionSubsetRecommendationRepository.js';
 import type {
   CompanySummary,
   ExistingSuggestion,
@@ -114,6 +115,7 @@ const mockContextProvider: RecommendationContextProvider = {
 };
 
 const postgresContextProvider = new PostgresRecommendationContextProvider();
+const productionSubsetContextProvider = new ProductionSubsetRecommendationContextProvider();
 
 const demoSuggestions: ExistingSuggestion[] = [
   {
@@ -204,14 +206,61 @@ const demoNewOpportunity: NewOpportunity = {
 
 type LoadedContext = {
   context: RecommendationContext;
-  dataSource: 'database' | 'mock';
+  dataSource: 'production_subset' | 'database' | 'mock';
 };
+
+export type PostingCadence = {
+  daysSinceLastPublished: number | null;
+  recommendedFocus: 'existing' | 'new';
+};
+
+export function classifyPostingCadence(
+  releases: Pick<PastRelease, 'publishedAt'>[],
+  staleAfterDays = config.RECOMMENDATION_STALE_AFTER_DAYS,
+  now = Date.now(),
+): PostingCadence {
+  const timestamps = releases
+    .map((release) => Date.parse(release.publishedAt))
+    .filter(Number.isFinite);
+  if (timestamps.length === 0) {
+    return { daysSinceLastPublished: null, recommendedFocus: 'existing' };
+  }
+
+  const latestTimestamp = Math.max(...timestamps);
+  const daysSinceLastPublished = Math.max(
+    0,
+    Math.floor((now - latestTimestamp) / 86_400_000),
+  );
+  return {
+    daysSinceLastPublished,
+    recommendedFocus: daysSinceLastPublished >= staleAfterDays ? 'existing' : 'new',
+  };
+}
 
 let databaseFallbackLogged = false;
 
 async function loadContext(companyId: string): Promise<LoadedContext> {
   const useMock = config.NODE_ENV === 'test' || config.RECOMMENDATION_DATA_SOURCE === 'mock';
   if (useMock) return { context: await mockContextProvider.get(companyId), dataSource: 'mock' };
+
+  if (
+    config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
+    config.RECOMMENDATION_DATA_SOURCE === 'auto'
+  ) {
+    try {
+      return {
+        context: await productionSubsetContextProvider.get(companyId),
+        dataSource: 'production_subset',
+      };
+    } catch (error) {
+      if (
+        config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
+        error instanceof CompanyNotFoundError
+      ) {
+        throw error;
+      }
+    }
+  }
 
   try {
     return { context: await postgresContextProvider.get(companyId), dataSource: 'database' };
@@ -274,9 +323,9 @@ function genericSuggestions(context: RecommendationContext): ExistingSuggestion[
           ? `過去記事は${new Intl.NumberFormat('ja-JP').format(release.pageView)}PVを記録しており、関心を次の物語へつなげられます。`
           : '過去の発表を現在の視点で振り返り、継続的な取り組みとして伝えられます。',
       contentOutline: [
-        '企画や取り組みが始まった背景',
-        '発表までに直面した課題と判断',
-        '公開後の変化と次に目指すこと',
+        `背景｜「${release.title}」の企画は、顧客や現場から届いたどんな課題感から始まったのかを紹介します。`,
+        '判断｜初期案では解決できなかったことと、担当者が方針を変えた瞬間を具体的なエピソードで描きます。',
+        '現在地｜公開後に寄せられた反応や現場の変化を振り返り、次に実現したいことへつなげます。',
       ],
       sourceTitle: release.title,
       sourceReleaseId: release.id,
@@ -296,10 +345,10 @@ function genericNewOpportunity(context: RecommendationContext): NewOpportunity {
     opportunityReason: `過去配信は${genres || '商品・サービス'}が中心です。企業情報にある「${context.company.description}」を実現する人や組織の姿は、新しい発信の入口になります。`,
     pitch: `${context.company.name}の取り組みは、どんな人の、どんな判断から生まれているのでしょうか。日々の仕事で大切にしていることや、小さな改善の積み重ねを担当者への取材でひもときます。商品説明だけでは伝わらない、会社らしさが見える企画です。`,
     contentOutline: [
-      'きっかけ｜現在の仕事や役割を選んだ理由',
-      '日常｜チームが大切にしている判断と工夫',
-      '変化｜仕事を通じて生まれた顧客や地域との関係',
-      'これから｜次に実現したいこと',
+      'きっかけ｜「入社当初は○○に戸惑った」という担当者の言葉から、現在の役割を選んだ理由をひもときます。',
+      '日常｜朝会や顧客対応など、チームが日々繰り返している判断と小さな工夫を具体的に紹介します。',
+      '変化｜「お客様の一言が、チームの動きを変えた」という出来事を、関係者への取材で確かめます。',
+      'これから｜今後届けたい価値と、そのために次に挑戦することを担当者の言葉で結びます。',
     ],
     interviewQuestions: [
       '日々の仕事で最も大切にしている判断は何ですか？',
@@ -311,6 +360,7 @@ function genericNewOpportunity(context: RecommendationContext): NewOpportunity {
 
 function buildFallbackDashboard(loaded: LoadedContext): RecommendationDashboard {
   const useCuratedSeedContent = loaded.context.company.id === '900001';
+  const cadence = classifyPostingCadence(loaded.context.pastReleases);
   return {
     company: loaded.context.company,
     stats: dashboardStats(loaded.context),
@@ -325,6 +375,7 @@ function buildFallbackDashboard(loaded: LoadedContext): RecommendationDashboard 
       mode: 'demo',
       dataSource: loaded.dataSource,
       similarityMethod: 'OpenAI API未設定のため未実行',
+      ...cadence,
     },
   };
 }
@@ -343,7 +394,7 @@ const generatedPayloadSchema = z.object({
         title: z.string(),
         summary: z.string(),
         whyNow: z.string(),
-        contentOutline: z.array(z.string()).min(3).max(3),
+        contentOutline: z.array(z.string().min(20)).min(3).max(3),
         sourceReleaseId: z.string(),
       }),
     )
@@ -357,7 +408,7 @@ const generatedPayloadSchema = z.object({
     summary: z.string(),
     opportunityReason: z.string(),
     pitch: z.string(),
-    contentOutline: z.array(z.string()).min(4).max(4),
+    contentOutline: z.array(z.string().min(20)).min(4).max(4),
     interviewQuestions: z.array(z.string()).min(3).max(3),
   }),
 });
@@ -386,7 +437,7 @@ const responseJsonSchema = {
             type: 'array',
             minItems: 3,
             maxItems: 3,
-            items: { type: 'string' },
+            items: { type: 'string', minLength: 20 },
           },
           sourceReleaseId: { type: 'string' },
         },
@@ -418,7 +469,7 @@ const responseJsonSchema = {
           type: 'array',
           minItems: 4,
           maxItems: 4,
-          items: { type: 'string' },
+          items: { type: 'string', minLength: 20 },
         },
         interviewQuestions: {
           type: 'array',
@@ -483,10 +534,25 @@ type RankedSimilarRelease = Pick<
   'companyName' | 'title' | 'genre' | 'summary' | 'pageView' | 'likeCount'
 > & { similarity: number };
 
-async function generateCopy(context: RecommendationContext, similarExamples: RankedSimilarRelease[]) {
+async function generateCopy(
+  context: RecommendationContext,
+  similarExamples: RankedSimilarRelease[],
+  cadence: PostingCadence,
+) {
+  const promptCompany = {
+    name: context.company.name,
+    industry: context.company.industry,
+    description: context.company.description,
+  };
   const promptReleases = context.pastReleases.slice(0, 20).map((release) => ({
-    ...release,
-    body: release.body.slice(0, 1_500),
+    id: release.id,
+    genre: release.genre,
+    title: release.title,
+    summary: release.summary,
+    publishedAt: release.publishedAt,
+    pageView: release.pageView,
+    likeCount: release.likeCount,
+    keywords: release.keywords,
   }));
   const payload = await openAiRequest('responses', {
     model: config.OPENAI_TEXT_MODEL,
@@ -498,7 +564,7 @@ async function generateCopy(context: RecommendationContext, similarExamples: Ran
           {
             type: 'input_text',
             text:
-              'あなたは中小企業専門の広報編集者です。自社の過去配信を活かした企画4件と、過去に発信していない魅力を掘り起こす企画1件を日本語で提案してください。自社データに存在しない実績・制度・人数・顧客の声は事実として作らず、未確認事項は取材で確かめる企画仮説として表現してください。既存企画はそれぞれ実在するsourceReleaseIdを1つ指定し、できるだけ異なる過去配信を起点にしてください。他社類似事例は切り口の参考に限り、社名・商品名・実績を自社の事実として転用しないでください。タイトルは具体的で、人や判断が見える表現を優先してください。',
+              'あなたは中小企業専門の広報編集者です。自社の過去配信を活かした企画4件と、過去に発信していない魅力を掘り起こす企画1件を日本語で提案してください。recommendedFocusがexistingの場合は、久しぶりの配信を無理なく再開できるよう、左側の過去記事活用案を最優先で作ってください。recommendedFocusがnewの場合は、最近も配信している企業の発信が単調にならないよう、右側の未発信ジャンルを明確に差別化してください。各contentOutlineは見出しだけで終わらせず、「見出し｜本文に使える具体例の文章」の形式にし、一般論ではなく入力データの固有情報を反映してください。ただし、自社データに存在しない実績・制度・人数・顧客の声は事実として作らず、未確認事項は「取材で確かめる」「例えば」などの企画仮説として表現してください。既存企画はそれぞれ実在するsourceReleaseIdを1つ指定し、できるだけ異なる過去配信を起点にしてください。他社類似事例は切り口の参考に限り、社名・商品名・実績を自社の事実として転用しないでください。タイトルは具体的で、人や判断が見える表現を優先してください。',
           },
         ],
       },
@@ -508,7 +574,8 @@ async function generateCopy(context: RecommendationContext, similarExamples: Ran
           {
             type: 'input_text',
             text: JSON.stringify({
-              company: context.company,
+              company: promptCompany,
+              postingCadence: cadence,
               pastReleases: promptReleases,
               similarExamples,
             }),
@@ -656,6 +723,17 @@ export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
   if (config.NODE_ENV === 'test' || config.RECOMMENDATION_DATA_SOURCE === 'mock') {
     return mockContextProvider.listCompanies();
   }
+  if (
+    config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
+    config.RECOMMENDATION_DATA_SOURCE === 'auto'
+  ) {
+    try {
+      const companies = await productionSubsetContextProvider.listCompanies();
+      if (companies.length > 0) return companies;
+    } catch (error) {
+      if (config.RECOMMENDATION_DATA_SOURCE === 'production_subset') throw error;
+    }
+  }
   try {
     const companies = await postgresContextProvider.listCompanies();
     return companies.length > 0 ? companies : mockContextProvider.listCompanies();
@@ -665,27 +743,56 @@ export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
   }
 }
 
-export async function getRecommendationDashboard(companyId = '900001') {
-  const cached = cachedDashboard(companyId);
+async function resolveCompanyId(companyId?: string): Promise<string> {
+  if (companyId) return companyId;
+  if (config.NODE_ENV === 'test' || config.RECOMMENDATION_DATA_SOURCE === 'mock') return '900001';
+
+  if (
+    config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
+    config.RECOMMENDATION_DATA_SOURCE === 'auto'
+  ) {
+    try {
+      const companies = await productionSubsetContextProvider.listCompanies();
+      const firstCompany = companies[0];
+      if (firstCompany) return firstCompany.id;
+    } catch (error) {
+      if (config.RECOMMENDATION_DATA_SOURCE === 'production_subset') throw error;
+    }
+  }
+
+  try {
+    const companies = await postgresContextProvider.listCompanies();
+    const firstCompany = companies[0];
+    if (firstCompany) return firstCompany.id;
+  } catch (error) {
+    if (config.RECOMMENDATION_DATA_SOURCE === 'database') throw error;
+  }
+  return '900001';
+}
+
+export async function getRecommendationDashboard(companyId?: string) {
+  const resolvedCompanyId = await resolveCompanyId(companyId);
+  const cached = cachedDashboard(resolvedCompanyId);
   if (cached) return cached;
   if (!config.OPENAI_API_KEY) {
-    const fallback = await getDemoDashboard(companyId);
-    cacheDashboard(companyId, fallback);
+    const fallback = await getDemoDashboard(resolvedCompanyId);
+    cacheDashboard(resolvedCompanyId, fallback);
     return fallback;
   }
-  return regenerateRecommendationDashboard(companyId);
+  return regenerateRecommendationDashboard(resolvedCompanyId);
 }
 
 export async function regenerateRecommendationDashboard(
-  companyId = '900001',
+  companyId?: string,
 ): Promise<RecommendationDashboard> {
-  const activeGeneration = inFlightGeneration.get(companyId);
+  const resolvedCompanyId = await resolveCompanyId(companyId);
+  const activeGeneration = inFlightGeneration.get(resolvedCompanyId);
   if (activeGeneration) return activeGeneration;
 
-  const generation = generateDashboard(companyId).finally(() => {
-    inFlightGeneration.delete(companyId);
+  const generation = generateDashboard(resolvedCompanyId).finally(() => {
+    inFlightGeneration.delete(resolvedCompanyId);
   });
-  inFlightGeneration.set(companyId, generation);
+  inFlightGeneration.set(resolvedCompanyId, generation);
   return generation;
 }
 
@@ -698,8 +805,9 @@ async function generateDashboard(companyId: string): Promise<RecommendationDashb
   }
 
   try {
+    const cadence = classifyPostingCadence(loaded.context.pastReleases);
     const similarExamples = await rankSimilarExamples(loaded.context);
-    const generated = await generateCopy(loaded.context, similarExamples);
+    const generated = await generateCopy(loaded.context, similarExamples, cadence);
     const similarities = await scoreSuggestions(generated.existingSuggestions, loaded.context.pastReleases);
     const releaseById = new Map(loaded.context.pastReleases.map((release) => [release.id, release]));
     const defaultSource = loaded.context.pastReleases[0]!;
@@ -724,6 +832,7 @@ async function generateDashboard(companyId: string): Promise<RecommendationDashb
         mode: 'openai',
         dataSource: loaded.dataSource,
         similarityMethod: `${config.OPENAI_EMBEDDING_MODEL} のコサイン類似度`,
+        ...cadence,
       },
     };
     cacheDashboard(companyId, dashboard);

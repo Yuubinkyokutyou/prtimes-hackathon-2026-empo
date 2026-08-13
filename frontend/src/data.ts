@@ -47,9 +47,15 @@ export type RecommendationDashboard = {
   meta: {
     generatedAt: string;
     mode: 'demo' | 'openai';
-    dataSource?: 'database' | 'mock';
+    dataSource?: 'production_subset' | 'database' | 'mock';
     similarityMethod: string;
+    recommendedFocus: 'existing' | 'new';
+    daysSinceLastPublished: number | null;
   };
+};
+
+export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | 'industry'> & {
+  releaseCount: number;
 };
 
 export const fallbackDashboard: RecommendationDashboard = {
@@ -150,5 +156,7 @@ export const fallbackDashboard: RecommendationDashboard = {
     generatedAt: new Date().toISOString(),
     mode: 'demo',
     similarityMethod: 'デモ用の埋め込み類似度',
+    recommendedFocus: 'new',
+    daysSinceLastPublished: 1,
   },
 };

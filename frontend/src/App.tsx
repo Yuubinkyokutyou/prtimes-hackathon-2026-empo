@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   fallbackDashboard,
+  type CompanySummary,
   type ExistingSuggestion,
   type NewOpportunity,
   type RecommendationDashboard,
@@ -126,11 +127,30 @@ function SuggestionCard({
 
 function CompanyPanel({
   data,
+  companies,
+  companiesLoading,
+  changingCompanyId,
   onClose,
+  onSelectCompany,
 }: {
   data: RecommendationDashboard;
+  companies: CompanySummary[];
+  companiesLoading: boolean;
+  changingCompanyId: string | null;
   onClose: () => void;
+  onSelectCompany: (companyId: string) => void;
 }) {
+  const [query, setQuery] = useState('');
+  const filteredCompanies = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('ja-JP');
+    const matches = normalizedQuery
+      ? companies.filter((company) =>
+          `${company.name} ${company.industry}`.toLocaleLowerCase('ja-JP').includes(normalizedQuery),
+        )
+      : companies;
+    return matches.slice(0, 100);
+  }, [companies, query]);
+
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
       <aside
@@ -148,6 +168,53 @@ function CompanyPanel({
           <span className="company-avatar company-avatar--large">{data.company.initials}</span>
           <div><small>分析対象企業</small><h2>{data.company.name}</h2></div>
         </div>
+        <section className="company-picker" aria-label="企業を選択">
+          <div className="company-picker__heading">
+            <label htmlFor="company-search">企業を切り替える</label>
+            <small>
+              {companiesLoading
+                ? '読込中…'
+                : `${filteredCompanies.length}件表示 / 全${companies.length}社`}
+            </small>
+          </div>
+          <input
+            autoComplete="off"
+            id="company-search"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="企業名・業種で検索"
+            type="search"
+            value={query}
+          />
+          <div className="company-picker__list" role="list">
+            {filteredCompanies.map((company) => {
+              const selected = company.id === data.company.id;
+              const changing = company.id === changingCompanyId;
+              return (
+                <button
+                  aria-current={selected ? 'true' : undefined}
+                  className={`company-option${selected ? ' is-selected' : ''}`}
+                  disabled={Boolean(changingCompanyId) || selected}
+                  key={company.id}
+                  onClick={() => onSelectCompany(company.id)}
+                  role="listitem"
+                  type="button"
+                >
+                  <span className="company-avatar company-option__avatar">{company.initials}</span>
+                  <span className="company-option__body">
+                    <strong>{company.name}</strong>
+                    <small>{company.industry}・配信{company.releaseCount}件</small>
+                  </span>
+                  <span className="company-option__state">
+                    {changing ? '提案を生成中…' : selected ? <Icon name="check" size={16} /> : <Icon name="arrow" size={15} />}
+                  </span>
+                </button>
+              );
+            })}
+            {!companiesLoading && filteredCompanies.length === 0 && (
+              <p className="company-picker__empty">該当する企業がありません</p>
+            )}
+          </div>
+        </section>
         <p className="company-panel__description">{data.company.description}</p>
         <dl className="company-details">
           <div><dt><Icon name="building" size={17} />業種</dt><dd>{data.company.industry}</dd></div>
@@ -163,9 +230,11 @@ function CompanyPanel({
           <p>
             <strong>データについて</strong>
             <span>
-              {data.meta.dataSource === 'database'
-                ? '企業情報と過去配信をデータベースから取得しています。'
-                : 'データベースに接続できないため、seed準拠のデモデータを表示しています。'}
+              {data.meta.dataSource === 'production_subset'
+                ? 'production_subsetの企業情報と過去配信を参照しています。'
+                : data.meta.dataSource === 'database'
+                  ? '企業情報と過去配信をデータベースから取得しています。'
+                  : 'データベースに接続できないため、seed準拠のデモデータを表示しています。'}
             </span>
           </p>
         </div>
@@ -208,7 +277,7 @@ function SuggestionModal({
           </div>
           <div className="detail-block">
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
-            <div><h3>記事の構成案</h3><ol>{suggestion.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
+            <div><h3>おすすめ構成案・具体例</h3><ol>{suggestion.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
           </div>
         </div>
         <div className="detail-modal__source"><span>着想に使った過去配信</span><strong>{suggestion.sourceTitle}</strong></div>
@@ -253,7 +322,7 @@ function PitchModal({
           <div className="detail-block">
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
             <div>
-              <h3>記事の構成案</h3>
+              <h3>おすすめ構成案・具体例</h3>
               <ol>{opportunity.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol>
             </div>
           </div>
@@ -275,10 +344,15 @@ export function App() {
   const [pitchOpen, setPitchOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
+  const [companies, setCompanies] = useState<CompanySummary[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [changingCompanyId, setChangingCompanyId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${apiBaseUrl}/recommendations?companyId=${encodeURIComponent(fallbackDashboard.company.id)}`, {
+    const requestedCompanyId = new URLSearchParams(window.location.search).get('companyId');
+    const query = requestedCompanyId ? `?companyId=${encodeURIComponent(requestedCompanyId)}` : '';
+    fetch(`${apiBaseUrl}/recommendations${query}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -296,6 +370,24 @@ export function App() {
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!companyOpen || companies.length > 0) return;
+    const controller = new AbortController();
+    setCompaniesLoading(true);
+    fetch(`${apiBaseUrl}/recommendation-companies`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()) as { items: CompanySummary[] };
+      })
+      .then((data) => setCompanies(data.items))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setToast('企業一覧を取得できませんでした');
+      })
+      .finally(() => setCompaniesLoading(false));
+    return () => controller.abort();
+  }, [companyOpen, companies.length]);
 
   useEffect(() => {
     if (!companyOpen && !selectedSuggestion && !pitchOpen) return;
@@ -326,7 +418,7 @@ export function App() {
       '',
       dashboard.newOpportunity.pitch,
       '',
-      '記事の構成案',
+      'おすすめ構成案・具体例',
       ...dashboard.newOpportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
     ].join('\n');
     try {
@@ -345,7 +437,7 @@ export function App() {
       '',
       suggestion.summary,
       '',
-      '記事の構成案',
+      'おすすめ構成案・具体例',
       ...suggestion.contentOutline.map((item, index) => `${index + 1}. ${item}`),
       '',
       `着想元：${suggestion.sourceTitle}`,
@@ -357,6 +449,33 @@ export function App() {
       setToast('企画メモをコピーしました');
     } catch {
       setToast('コピーできませんでした');
+    }
+  };
+
+  const selectCompany = async (companyId: string) => {
+    if (companyId === dashboard.company.id || changingCompanyId) return;
+    setChangingCompanyId(companyId);
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/recommendations?companyId=${encodeURIComponent(companyId)}`,
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as RecommendationDashboard;
+      setDashboard(data);
+      setVisibleCount(1);
+      setSelectedSuggestion(null);
+      setPitchOpen(false);
+      setCompanyOpen(false);
+      const url = new URL(window.location.href);
+      url.searchParams.set('companyId', companyId);
+      window.history.replaceState({}, '', url);
+      setToast(`${data.company.name}に切り替えました`);
+    } catch {
+      setToast('企業の切り替えに失敗しました');
+    } finally {
+      setChangingCompanyId(null);
+      setLoading(false);
     }
   };
 
@@ -374,13 +493,14 @@ export function App() {
       </header>
 
       <main>
-        <section className="recommendation-grid">
+        <section className={`recommendation-grid recommendation-grid--focus-${dashboard.meta.recommendedFocus}`}>
           <div className="past-panel">
             <div className="section-heading">
               <div>
                 <p className="section-kicker"><span>01</span> BUILD ON YOUR STORY</p>
                 <h2>これまでの発信を、<br />次の記事へつなげる</h2>
               </div>
+              {dashboard.meta.recommendedFocus === 'existing' && <span className="focus-badge">いまのおすすめ</span>}
             </div>
 
             <div className="suggestion-list">
@@ -407,7 +527,7 @@ export function App() {
             <div className="discovery-panel__glow" aria-hidden="true" />
             <div className="discovery-panel__top">
               <p className="section-kicker section-kicker--light"><span>02</span> FIND A NEW STORY</p>
-              <span className="new-badge"><Icon name="sparkles" size={13} /> NEW PERSPECTIVE</span>
+              <span className="new-badge"><Icon name="sparkles" size={13} /> {dashboard.meta.recommendedFocus === 'new' ? 'いまのおすすめ' : 'NEW PERSPECTIVE'}</span>
             </div>
             <h2>まだ語っていない、<br />あなたの会社の魅力</h2>
             <p className="discovery-panel__intro">過去の発信にはなかった、新しい切り口を見つけました。</p>
@@ -440,7 +560,16 @@ export function App() {
         </footer>
       </main>
 
-      {companyOpen && <CompanyPanel data={dashboard} onClose={() => setCompanyOpen(false)} />}
+      {companyOpen && (
+        <CompanyPanel
+          companies={companies}
+          companiesLoading={companiesLoading}
+          changingCompanyId={changingCompanyId}
+          data={dashboard}
+          onClose={() => setCompanyOpen(false)}
+          onSelectCompany={selectCompany}
+        />
+      )}
       {selectedSuggestion && (
         <SuggestionModal
           suggestion={selectedSuggestion}

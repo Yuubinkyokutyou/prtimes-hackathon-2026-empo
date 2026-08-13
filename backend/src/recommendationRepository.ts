@@ -18,7 +18,7 @@ type CompanyRow = QueryResultRow & {
   company_name: string;
   address: string;
   description: string;
-  capital: number;
+  capital: number | string;
   foundation_date: string;
   url: string;
   industry_name: string;
@@ -62,9 +62,10 @@ function initialsFor(name: string): string {
   return Array.from(normalized)[0] ?? '企';
 }
 
-function formatCapital(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '—';
-  return `${new Intl.NumberFormat('ja-JP').format(value)}円`;
+function formatCapital(value: number | string): string {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return '—';
+  return `${new Intl.NumberFormat('ja-JP').format(numericValue)}円`;
 }
 
 function formatFounded(value: string): string {
@@ -208,7 +209,12 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       HAVING COUNT(r.release_id) FILTER (
         WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
       ) > 0
-      ORDER BY c.company_id`,
+      ORDER BY
+        COUNT(r.release_id) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        ) DESC,
+        MAX(r.created_at) DESC,
+        c.company_id`,
     );
 
     return result.rows.map((row) => ({
