@@ -3,6 +3,12 @@ import express, { type ErrorRequestHandler } from 'express';
 import helmet from 'helmet';
 import { config } from './config.js';
 import { pool } from './db.js';
+import {
+  getRecommendationDashboard,
+  listRecommendationCompanies,
+  regenerateRecommendationDashboard,
+} from './recommendations.js';
+import { CompanyNotFoundError } from './recommendationRepository.js';
 
 type ReleaseRow = {
   company_id: number;
@@ -79,11 +85,44 @@ app.get('/api/releases', async (request, response, next) => {
   }
 });
 
+app.get('/api/recommendations', async (request, response, next) => {
+  try {
+    const companyId = typeof request.query.companyId === 'string' ? request.query.companyId : undefined;
+    response.json(await getRecommendationDashboard(companyId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/recommendation-companies', async (_request, response, next) => {
+  try {
+    response.json({ items: await listRecommendationCompanies() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/recommendations/generate', async (request, response, next) => {
+  try {
+    const companyId =
+      typeof request.body?.companyId === 'string' && request.body.companyId.trim()
+        ? request.body.companyId.trim()
+        : undefined;
+    response.json(await regenerateRecommendationDashboard(companyId));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.use((_request, response) => {
   response.status(404).json({ error: 'Not found' });
 });
 
 const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
+  if (error instanceof CompanyNotFoundError) {
+    response.status(404).json({ error: 'Company not found' });
+    return;
+  }
   console.error(error);
   response.status(500).json({ error: 'Internal server error' });
 };

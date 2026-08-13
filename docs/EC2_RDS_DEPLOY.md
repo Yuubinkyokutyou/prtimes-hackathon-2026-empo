@@ -209,11 +209,15 @@ DATABASE_SSL=true
 DATABASE_SSL_REJECT_UNAUTHORIZED=false
 CORS_ORIGIN=http://<EC2_PUBLIC_IP>
 WEB_PORT=80
+OPENAI_API_KEY=
+RECOMMENDATION_DATA_SOURCE=database
 ```
 
 - `DATABASE_SSL=true` で通信を暗号化します。
 - `DATABASE_SSL_REJECT_UNAUTHORIZED=false` は、CA 証明書を準備せず動かすためのハッカソン向け設定です。
 - `CORS_ORIGIN` は末尾の `/` を付けず、ブラウザで開く Origin と完全一致させます。ドメインと HTTPS を導入したら `https://example.com` に変更します。
+- `RECOMMENDATION_DATA_SOURCE=database` にすると、推薦ダッシュボードもRDS上の分析テーブルを参照します。本番では `production_subset` を指定しません。
+- `OPENAI_API_KEY` は任意です。空の場合でも、RDSの分析データに基づくデモ提案を表示できます。
 - `.env.ec2` は `.gitignore` 対象です。コミットしないでください。
 - 長期運用では平文ファイルではなく、Secrets Manager または Systems Manager Parameter Store から起動時に渡してください。
 
@@ -249,6 +253,7 @@ EC2 内からアプリと DB のヘルスチェックを実行します。
 curl -fsS http://localhost/api/health
 curl -fsS http://localhost/api/health/db
 curl -fsS "http://localhost/api/releases?limit=1"
+curl -fsS http://localhost/api/recommendation-companies
 ```
 
 期待する結果です。
@@ -257,9 +262,10 @@ curl -fsS "http://localhost/api/releases?limit=1"
 {"status":"ok"}
 {"status":"ok","database":"connected"}
 {"items":[],"limit":1,"offset":0}
+{"items":[]}
 ```
 
-`/api/health/db` は `SELECT 1` による接続確認です。`/api/releases` がHTTP 200を返せば、backendがRDS上の `public.release`、`public.company`、`public.release_statistic` を実際に参照できています。分析データが0件の場合、`items` が空配列でも正常です。
+`/api/health/db` は `SELECT 1` による接続確認です。`/api/releases` と `/api/recommendation-companies` がHTTP 200を返せば、backendと推薦機能がRDS上の `public.release`、`public.company`、`public.industry`、`public.release_statistic` などを実際に参照できています。分析データが0件の場合、`items` が空配列でも正常です。
 
 ブラウザで `http://<EC2_PUBLIC_IP>/` を開きます。ここまで成功すれば、EC2 上のアプリからRDSを利用できています。
 

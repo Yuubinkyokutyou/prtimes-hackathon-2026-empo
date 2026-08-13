@@ -10,6 +10,7 @@
     "dev": "concurrently -n frontend,backend -c cyan,green \"npm run dev -w frontend\" \"npm run dev -w backend\"",
     "build": "npm run build -w backend && npm run build -w frontend",
     "migrate": "npm run migrate -w backend",
+    "db:replace-production-subset": "node database/production_subset/replace-development-data.mjs",
     "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
     "test": "npm test -w backend"
   },
