@@ -1,6 +1,7 @@
 import { type QueryResultRow } from 'pg';
 import { pool } from './db.js';
 import { buildReleaseEvidence } from './recommendationEvidence.js';
+import { isSmeByCapital } from './smeClassification.js';
 import type {
   CompanyProfile,
   CompanyProfileResult,
@@ -47,6 +48,7 @@ type CompanySummaryRow = QueryResultRow & {
   company_id: number;
   company_name: string;
   industry_name: string;
+  capital: number | string;
   release_count: string;
   last_published_at: Date;
 };
@@ -266,6 +268,7 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       `SELECT
         c.company_id,
         c.company_name,
+        c.capital,
         i.industry_name,
         COUNT(r.release_id) FILTER (
           WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
@@ -276,7 +279,7 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       FROM company AS c
       INNER JOIN industry AS i ON i.industry_id = c.industry_id
       LEFT JOIN release AS r ON r.company_id = c.company_id
-      GROUP BY c.company_id, c.company_name, i.industry_name
+      GROUP BY c.company_id, c.company_name, c.capital, i.industry_name
       HAVING COUNT(r.release_id) FILTER (
         WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
       ) > 0
@@ -296,6 +299,7 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       releaseCount: Number(row.release_count),
       lastPublishedAt: row.last_published_at.toISOString(),
       hasCachedRecommendation: false,
+      isSmeByCapital: isSmeByCapital(row.industry_name, Number(row.capital)),
     }));
   }
 }

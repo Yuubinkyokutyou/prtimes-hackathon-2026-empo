@@ -42,3 +42,21 @@ test('Postgres company profile uses one query without loading recommendation can
     lastPublishedAt: '2026-08-01T00:00:00.000Z',
   });
 });
+
+test('Postgres company list exposes the capital-based SME estimate', async () => {
+  const database = {
+    async query<T extends QueryResultRow>(): Promise<{ rows: T[] }> {
+      return { rows: [{
+        company_id: 1,
+        company_name: '株式会社テスト',
+        industry_name: 'サービス業',
+        capital: 5_000,
+        release_count: '1',
+        last_published_at: new Date('2026-08-01T00:00:00.000Z'),
+      } as unknown as T] };
+    },
+  };
+
+  const [company] = await new PostgresRecommendationContextProvider(database).listCompanies();
+  assert.equal(company?.isSmeByCapital, true);
+});
