@@ -102,3 +102,14 @@ export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | '
   releaseCount: number;
   lastPublishedAt: string;
 };
+
+export type RecommendationCompanyProfile = {
+  company: CompanyProfile;
+  stats: {
+    releaseCount: number;
+    lastPublishedAt: string | null;
+  };
+  meta: {
+    dataSource: 'production_subset' | 'database';
+  };
+};

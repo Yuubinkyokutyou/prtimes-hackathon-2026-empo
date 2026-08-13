@@ -38,6 +38,10 @@ export function ensureRecommendationStorage(): Promise<void> {
       ON recommendation_generation (cache_key, expires_at DESC)
     `);
     await pool.query(`
+      CREATE INDEX IF NOT EXISTS recommendation_generation_cache_latest_idx
+      ON recommendation_generation (cache_key, created_at DESC)
+    `);
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS recommendation_generation_company_idx
       ON recommendation_generation (company_id, created_at DESC)
     `);
@@ -52,7 +56,7 @@ export async function findCachedRecommendation(
   const result = await pool.query<{ dashboard: RecommendationDashboard }>(
     `SELECT dashboard
      FROM recommendation_generation
-     WHERE cache_key = $1 AND expires_at > CURRENT_TIMESTAMP
+     WHERE cache_key = $1
      ORDER BY created_at DESC
      LIMIT 1`,
     [cacheKey],
@@ -66,13 +70,12 @@ export async function insertRecommendationGeneration(
   companyId: string,
   dashboard: RecommendationDashboard,
   conditions: RecommendationGenerationOptions,
-  ttlMs: number,
 ): Promise<void> {
   await ensureRecommendationStorage();
   await pool.query(
     `INSERT INTO recommendation_generation
       (id, cache_key, company_id, dashboard, conditions, saved, expires_at)
-     VALUES ($1::uuid, $2, $3, $4::jsonb, $5::jsonb, $6, CURRENT_TIMESTAMP + ($7 * INTERVAL '1 millisecond'))`,
+     VALUES ($1::uuid, $2, $3, $4::jsonb, $5::jsonb, $6, 'infinity'::timestamptz)`,
     [
       dashboard.meta.generationId,
       cacheKey,
@@ -80,7 +83,6 @@ export async function insertRecommendationGeneration(
       JSON.stringify(dashboard),
       JSON.stringify(conditions),
       dashboard.meta.saved,
-      ttlMs,
     ],
   );
 }

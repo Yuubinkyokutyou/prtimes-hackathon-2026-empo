@@ -6,6 +6,7 @@ import { buildReleaseEvidence } from './recommendationEvidence.js';
 import { CompanyNotFoundError } from './recommendationRepository.js';
 import type {
   CompanyProfile,
+  CompanyProfileResult,
   CompanySummary,
   PastRelease,
   RecommendationContext,
@@ -226,6 +227,20 @@ implements RecommendationContextProvider {
       company: structuredClone(company),
       pastReleases: ownReleases.slice(0, 50).map((release) => structuredClone(release)),
       candidateReleases,
+    };
+  }
+
+  async getCompanyProfile(companyId: string): Promise<CompanyProfileResult> {
+    const loaded = this.load();
+    const company = loaded.companies.get(companyId);
+    if (!company) throw new CompanyNotFoundError(companyId);
+    const releases = loaded.releasesByCompany.get(companyId) ?? [];
+    return {
+      company: structuredClone(company),
+      stats: {
+        releaseCount: releases.length,
+        lastPublishedAt: releases[0]?.publishedAt ?? null,
+      },
     };
   }
 

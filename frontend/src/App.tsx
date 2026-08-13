@@ -3,6 +3,7 @@ import {
   type CompanySummary,
   type ExistingSuggestion,
   type NewOpportunity,
+  type RecommendationCompanyProfile,
   type RecommendationDashboard,
   type RecommendationGenerationOptions,
   type RecommendationHistoryItem,
@@ -155,7 +156,7 @@ function CompanyPanel({
   data,
   onClose,
 }: {
-  data: RecommendationDashboard;
+  data: RecommendationCompanyProfile;
   onClose: () => void;
 }) {
   return (
@@ -181,6 +182,8 @@ function CompanyPanel({
           <div><dt><Icon name="map" size={17} />所在地</dt><dd>{data.company.location}</dd></div>
           <div><dt><Icon name="calendar" size={17} />創業</dt><dd>{data.company.founded}</dd></div>
           <div><dt><Icon name="users" size={17} />資本金</dt><dd>{data.company.capital}</dd></div>
+          <div><dt><Icon name="file" size={17} />過去の配信</dt><dd>{data.stats.releaseCount}件</dd></div>
+          <div><dt><Icon name="clock" size={17} />最終配信日</dt><dd>{data.stats.lastPublishedAt ? new Date(data.stats.lastPublishedAt).toLocaleDateString('ja-JP') : '—'}</dd></div>
         </dl>
         <a className="company-link" href={data.company.website} target="_blank" rel="noreferrer">
           <Icon name="globe" size={17} /> コーポレートサイト <Icon name="arrow" size={16} />
@@ -376,7 +379,7 @@ function HistoryPanel({
       <aside className="company-panel history-panel" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="生成履歴">
         <button className="icon-button company-panel__close" onClick={onClose} type="button" aria-label="閉じる"><Icon name="x" /></button>
         <p className="micro-label">GENERATION HISTORY</p><h2>生成履歴</h2>
-        <p className="history-panel__intro">生成結果はPostgreSQLに保存され、キャッシュ期限後も履歴から開けます。</p>
+        <p className="history-panel__intro">生成結果はPostgreSQLに保存され、いつでも履歴から開けます。</p>
         <div className="history-list">
           {items.map((item) => (
             <button key={item.id} onClick={() => onLoad(item.id)} type="button">
@@ -1164,7 +1167,7 @@ export function App() {
   const [page, setPage] = useState<PrPage>('dashboard');
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
-  const [companyProfileDashboard, setCompanyProfileDashboard] = useState<RecommendationDashboard | null>(null);
+  const [companyProfile, setCompanyProfile] = useState<RecommendationCompanyProfile | null>(null);
   const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | undefined>(
     () => new URLSearchParams(window.location.search).get('companyId') ?? undefined,
@@ -1200,9 +1203,9 @@ export function App() {
     if (!selectedCompanyId || companyProfileLoading) return;
     setCompanyProfileLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/recommendations?companyId=${encodeURIComponent(selectedCompanyId)}`);
+      const response = await fetch(`${apiBaseUrl}/recommendation-companies/${encodeURIComponent(selectedCompanyId)}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setCompanyProfileDashboard((await response.json()) as RecommendationDashboard);
+      setCompanyProfile((await response.json()) as RecommendationCompanyProfile);
     } finally {
       setCompanyProfileLoading(false);
     }
@@ -1240,10 +1243,10 @@ export function App() {
           </div>
         )}
       </main>
-      {companyProfileDashboard && (
+      {companyProfile && (
         <CompanyPanel
-          data={companyProfileDashboard}
-          onClose={() => setCompanyProfileDashboard(null)}
+          data={companyProfile}
+          onClose={() => setCompanyProfile(null)}
         />
       )}
     </div>

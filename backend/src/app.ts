@@ -11,6 +11,7 @@ import {
 } from './recommendationCacheRepository.js';
 import {
   getRecommendationDashboard,
+  getRecommendationCompanyProfile,
   listRecommendationCompanies,
   refreshEditedDashboardCache,
   regenerateRecommendationDashboard,
@@ -106,6 +107,15 @@ app.get('/api/recommendations', async (request, response, next) => {
 app.get('/api/recommendation-companies', async (_request, response, next) => {
   try {
     response.json({ items: await listRecommendationCompanies() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/recommendation-companies/:companyId', async (request, response, next) => {
+  try {
+    const companyId = z.string().min(1).parse(request.params.companyId);
+    response.json(await getRecommendationCompanyProfile(companyId));
   } catch (error) {
     next(error);
   }

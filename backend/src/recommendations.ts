@@ -17,6 +17,7 @@ import type {
   NewOpportunity,
   PastRelease,
   RecommendationContext,
+  RecommendationCompanyProfile,
   RecommendationDashboard,
   RecommendationGenerationOptions,
   SimilarRelease,
@@ -754,8 +755,7 @@ async function rankSimilarExamples(context: RecommendationContext): Promise<Rank
     .slice(0, 8);
 }
 
-type DashboardCacheEntry = { value: RecommendationDashboard; expiresAt: number };
-const dashboardCache = new Map<string, DashboardCacheEntry>();
+const dashboardCache = new Map<string, RecommendationDashboard>();
 const inFlightGeneration = new Map<string, Promise<RecommendationDashboard>>();
 let storageWarningLogged = false;
 
@@ -774,20 +774,11 @@ function cacheKeyFor(companyId: string, options: RecommendationGenerationOptions
 }
 
 function cachedDashboard(cacheKey: string): RecommendationDashboard | undefined {
-  const entry = dashboardCache.get(cacheKey);
-  if (!entry) return undefined;
-  if (entry.expiresAt <= Date.now()) {
-    dashboardCache.delete(cacheKey);
-    return undefined;
-  }
-  return entry.value;
+  return dashboardCache.get(cacheKey);
 }
 
 function cacheDashboard(cacheKey: string, dashboard: RecommendationDashboard): void {
-  dashboardCache.set(cacheKey, {
-    value: dashboard,
-    expiresAt: Date.now() + config.RECOMMENDATION_CACHE_TTL_MS,
-  });
+  dashboardCache.set(cacheKey, dashboard);
 }
 
 async function persistentCachedDashboard(
@@ -819,7 +810,6 @@ async function persistDashboard(
       companyId,
       dashboard,
       options,
-      config.RECOMMENDATION_CACHE_TTL_MS,
     );
   } catch (error) {
     if (!storageWarningLogged) {
@@ -831,9 +821,9 @@ async function persistDashboard(
 }
 
 export function refreshEditedDashboardCache(dashboard: RecommendationDashboard): void {
-  for (const [key, entry] of dashboardCache) {
-    if (entry.value.meta.generationId === dashboard.meta.generationId) {
-      dashboardCache.set(key, { ...entry, value: dashboard });
+  for (const [key, cached] of dashboardCache) {
+    if (cached.meta.generationId === dashboard.meta.generationId) {
+      dashboardCache.set(key, dashboard);
     }
   }
 }
@@ -853,6 +843,33 @@ export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
     }
   }
   return postgresContextProvider.listCompanies();
+}
+
+export async function getRecommendationCompanyProfile(
+  companyId: string,
+): Promise<RecommendationCompanyProfile> {
+  if (
+    config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
+    config.RECOMMENDATION_DATA_SOURCE === 'auto'
+  ) {
+    try {
+      return {
+        ...await productionSubsetContextProvider.getCompanyProfile(companyId),
+        meta: { dataSource: 'production_subset' },
+      };
+    } catch (error) {
+      if (
+        config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
+        error instanceof CompanyNotFoundError
+      ) {
+        throw error;
+      }
+    }
+  }
+  return {
+    ...await postgresContextProvider.getCompanyProfile(companyId),
+    meta: { dataSource: 'database' },
+  };
 }
 
 async function resolveCompanyId(companyId?: string): Promise<string> {

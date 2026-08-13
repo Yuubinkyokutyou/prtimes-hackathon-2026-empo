@@ -29,7 +29,6 @@ const schema = z.object({
     .enum(['auto', 'production_subset', 'database'])
     .default('auto'),
   PRODUCTION_SUBSET_DIRECTORY: z.string().optional(),
-  RECOMMENDATION_CACHE_TTL_MS: z.coerce.number().int().positive().default(900_000),
   RECOMMENDATION_STALE_AFTER_DAYS: z.coerce.number().int().positive().default(60),
   RECOMMENDATION_STORAGE_ENABLED: enabledBooleanString,
 });

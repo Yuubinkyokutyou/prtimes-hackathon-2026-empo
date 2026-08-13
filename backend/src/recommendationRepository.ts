@@ -3,6 +3,7 @@ import { pool } from './db.js';
 import { buildReleaseEvidence } from './recommendationEvidence.js';
 import type {
   CompanyProfile,
+  CompanyProfileResult,
   CompanySummary,
   PastRelease,
   RecommendationContext,
@@ -48,6 +49,11 @@ type CompanySummaryRow = QueryResultRow & {
   industry_name: string;
   release_count: string;
   last_published_at: Date;
+};
+
+type CompanyProfileRow = CompanyRow & {
+  release_count: string;
+  last_published_at: Date | null;
 };
 
 export class CompanyNotFoundError extends Error {
@@ -204,6 +210,54 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       candidateReleases: candidateResult.rows.map(
         (row): SimilarRelease => ({ ...toPastRelease(row), companyName: row.company_name }),
       ),
+    };
+  }
+
+  async getCompanyProfile(companyId: string): Promise<CompanyProfileResult> {
+    const numericCompanyId = Number(companyId);
+    if (!Number.isSafeInteger(numericCompanyId) || numericCompanyId <= 0) {
+      throw new CompanyNotFoundError(companyId);
+    }
+
+    const result = await this.database.query<CompanyProfileRow>(
+      `SELECT
+        c.company_id,
+        c.company_name,
+        c.address,
+        c.description,
+        c.capital,
+        c.foundation_date,
+        c.url,
+        i.industry_name,
+        COUNT(r.release_id) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        )::text AS release_count,
+        MAX(r.created_at) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        ) AS last_published_at
+      FROM company AS c
+      INNER JOIN industry AS i ON i.industry_id = c.industry_id
+      LEFT JOIN release AS r ON r.company_id = c.company_id
+      WHERE c.company_id = $1
+      GROUP BY
+        c.company_id,
+        c.company_name,
+        c.address,
+        c.description,
+        c.capital,
+        c.foundation_date,
+        c.url,
+        i.industry_name`,
+      [numericCompanyId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new CompanyNotFoundError(companyId);
+    return {
+      company: toCompany(row),
+      stats: {
+        releaseCount: Number(row.release_count),
+        lastPublishedAt: row.last_published_at?.toISOString() ?? null,
+      },
     };
   }
 
