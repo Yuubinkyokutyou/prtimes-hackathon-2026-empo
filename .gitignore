@@ -10,6 +10,7 @@ dist/
 coverage/
 .vite/
 *.tsbuildinfo
+.worktree-dev.json
 
 # Production-derived local data. Keep the import tooling, but never commit the CSV contents.
 database/production_subset/csv/

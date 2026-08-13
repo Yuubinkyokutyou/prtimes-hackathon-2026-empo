@@ -444,7 +444,7 @@ function layerFromLastPublished(dashboard: RecommendationDashboard): Recommendat
   return days !== null && days >= 60 ? 'existing' : 'new';
 }
 
-function RecommendationApp() {
+function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLayer }) {
   const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
   const [visibleCount, setVisibleCount] = useState(1);
   const [visibleOpportunityCount, setVisibleOpportunityCount] = useState(1);
@@ -479,7 +479,7 @@ function RecommendationApp() {
       })
       .then((data) => {
         setDashboard(data);
-        setActiveLayer(layerFromLastPublished(data));
+        setActiveLayer(initialLayer ?? layerFromLastPublished(data));
         setLoadError('');
         setVisibleCount(1);
         setVisibleOpportunityCount(1);
@@ -491,7 +491,7 @@ function RecommendationApp() {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, []);
+  }, [initialLayer]);
 
   useEffect(() => {
     if (!companyOpen || companies.length > 0) return;
@@ -1041,7 +1041,74 @@ function PrSidebar({ open, page, onPage }: { open: boolean; page: PrPage; onPage
   );
 }
 
-function PrDashboard() {
+const DASHBOARD_STALE_AFTER_DAYS = 30;
+
+function DashboardRecommendationBanner({
+  onOpenRecommendation,
+}: {
+  onOpenRecommendation: (layer: RecommendationLayer) => void;
+}) {
+  const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const requestedCompanyId = new URLSearchParams(window.location.search).get('companyId');
+    const query = requestedCompanyId ? `?companyId=${encodeURIComponent(requestedCompanyId)}` : '';
+    fetch(`${apiBaseUrl}/recommendations${query}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()) as RecommendationDashboard;
+      })
+      .then((data) => {
+        setDashboard(data);
+        setLoadError(false);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(true);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const daysSinceLastPublished = dashboard?.meta.daysSinceLastPublished ?? null;
+  const isStale = daysSinceLastPublished !== null && daysSinceLastPublished >= DASHBOARD_STALE_AFTER_DAYS;
+  const existingSuggestion = dashboard?.existingSuggestions[0];
+  const showExistingSuggestion = isStale && Boolean(existingSuggestion);
+  const layer: RecommendationLayer = showExistingSuggestion ? 'existing' : 'new';
+  const recommendation = showExistingSuggestion ? existingSuggestion : dashboard?.newOpportunities[0];
+
+  return (
+    <section className="pr-recommend-banner" aria-label="おすすめのプレスリリース企画">
+      <span className="pr-recommend-banner__spark" aria-hidden="true"><Icon name="sparkles" size={22} /></span>
+      <div className="pr-recommend-banner__content">
+        <h2>PR企画レコメンド</h2>
+        {!dashboard && !loadError && (
+          <p className="pr-recommend-banner__proposal" role="status">次の発信アイデアを探しています。</p>
+        )}
+        {loadError && (
+          <p className="pr-recommend-banner__proposal">次のプレスリリース企画を見つけませんか？</p>
+        )}
+        {dashboard && recommendation && (
+          <p className="pr-recommend-banner__proposal">{recommendation.title}</p>
+        )}
+      </div>
+      <button
+        disabled={!dashboard || !recommendation}
+        onClick={() => onOpenRecommendation(layer)}
+        type="button"
+      >
+        {dashboard && recommendation ? '詳しく見る' : '準備中'} <Icon name="arrow" size={17} />
+      </button>
+    </section>
+  );
+}
+
+function PrDashboard({
+  onOpenRecommendation,
+}: {
+  onOpenRecommendation: (layer: RecommendationLayer) => void;
+}) {
   const [open, setOpen] = useState([true, true]);
   const notices = [
     ['コンテンツ掲載基準を更新しました', '「日本初」「No.1」等の最上級表現の改定や、メディアタイアップ広告に関する基準の新設など、コンテンツ掲載基準を更新しました。'],
@@ -1051,6 +1118,7 @@ function PrDashboard() {
     <div className="pr-dashboard">
       <p className="pr-breadcrumb">ダッシュボード</p>
       <h1>ダッシュボード</h1>
+      <DashboardRecommendationBanner onOpenRecommendation={onOpenRecommendation} />
       <div className="pr-project"><strong>テスト4</strong><span>⌄　×</span></div>
       {notices.map(([title, body], index) => (
         <article className="pr-notice" key={title}>
@@ -1066,8 +1134,18 @@ function PrDashboard() {
 
 export function App() {
   const [page, setPage] = useState<PrPage>('dashboard');
+  const [recommendationLayer, setRecommendationLayer] = useState<RecommendationLayer>();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const selectPage = (next: PrPage) => { setPage(next); setMobileOpen(false); };
+  const selectPage = (next: PrPage) => {
+    setPage(next);
+    setRecommendationLayer(undefined);
+    setMobileOpen(false);
+  };
+  const openRecommendation = (layer: RecommendationLayer) => {
+    setRecommendationLayer(layer);
+    setPage('recommend');
+    setMobileOpen(false);
+  };
   return (
     <div className="pr-shell">
       <PrHeader onMenu={() => setMobileOpen(!mobileOpen)} />
@@ -1075,11 +1153,11 @@ export function App() {
       <PrSidebar open={mobileOpen} page={page} onPage={selectPage} />
       <main className="pr-main">
         {page === 'dashboard' ? (
-          <PrDashboard />
+          <PrDashboard onOpenRecommendation={openRecommendation} />
         ) : (
           <div className="pr-recommend-content">
             <p className="pr-breadcrumb">分析データ　›　レコメンド</p>
-            <RecommendationApp />
+            <RecommendationApp initialLayer={recommendationLayer} />
           </div>
         )}
       </main>

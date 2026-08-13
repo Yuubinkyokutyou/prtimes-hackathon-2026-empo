@@ -8,6 +8,10 @@
   ],
   "scripts": {
     "dev": "concurrently -n frontend,backend -c cyan,green \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "dev:worktree": "node scripts/dev-worktree.mjs up",
+    "dev:worktree:down": "node scripts/dev-worktree.mjs down",
+    "dev:worktree:status": "node scripts/dev-worktree.mjs status",
+    "dev:worktree:logs": "node scripts/dev-worktree.mjs logs",
     "build": "npm run build -w backend && npm run build -w frontend",
     "migrate": "npm run migrate -w backend",
     "db:replace-production-subset": "node database/production_subset/replace-development-data.mjs",

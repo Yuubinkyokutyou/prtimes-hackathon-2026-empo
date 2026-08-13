@@ -2,6 +2,8 @@
 
 React + Node.js/TypeScript + PostgreSQL で構成したアプリケーションです。
 
+ダッシュボード上部のレコメンド導線については、[機能解説ドキュメント](docs/dashboard-recommendation-banner.md)を参照してください。
+
 過去のプレスリリースをもとにした次回企画と、まだ発信していない企業の魅力を発見する企画を提案するダッシュボードです。OpenAI API キー未設定時も、選択したデータソースの企業情報と配信実績からテンプレートで提案を作成します。
 
 ## 必要なもの
@@ -10,6 +12,22 @@ React + Node.js/TypeScript + PostgreSQL で構成したアプリケーション�
 - Docker を使わず動かす場合は Node.js 22 と PostgreSQL 16
 
 ## ローカル開発（推奨）
+
+worktree では、次のコマンドを使うと専用の Compose プロジェクト名・ボリューム・空きポートを自動で割り当てます。割り当てた URL は `.worktree-dev.json` に保存され、同じ worktree では再利用されます。
+
+```bash
+npm run dev:worktree
+```
+
+起動状態の確認・ログ表示・停止も worktree 単位で行えます。
+
+```bash
+npm run dev:worktree:status
+npm run dev:worktree:logs
+npm run dev:worktree:down
+```
+
+通常の固定ポートで起動する場合は、従来どおり次を使います。
 
 ```bash
 cp .env.example .env
@@ -41,6 +59,7 @@ npm run dev
 
 ```bash
 npm run dev        # frontend / backend を同時起動
+npm run dev:worktree # worktree専用の空きポートでDocker環境を起動
 npm run build      # 両方をビルド
 npm run migrate    # アプリ用DBマイグレーションを適用
 npm run typecheck  # TypeScript の型検査
