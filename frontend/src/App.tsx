@@ -1045,8 +1045,11 @@ function PrHeader({
         <button type="button">メディアリスト新規作成</button>
         <button className="pr-primary-action" type="button">プレスリリース新規作成</button>
       </div>
-      <div className="pr-support"><small>サポートデスクはこちら</small><strong>☎ 03-6625-4684</strong></div>
-      <button className="pr-contact" type="button">問い合わせフォーム</button>
+      <div className="pr-support">
+        <small>サポートデスクはこちら</small>
+        <strong><ShellIcon name="phone" />03-6625-4684</strong>
+      </div>
+      <button className="pr-contact" type="button"><ShellIcon name="contact" />問い合わせフォーム</button>
       <HeaderCompanySwitcher
         companies={companies}
         loading={companiesLoading}
@@ -1059,27 +1062,49 @@ function PrHeader({
   );
 }
 
+type ShellIconName = 'analytics' | 'building' | 'clip' | 'contact' | 'dashboard' | 'media' | 'phone' | 'release' | 'story';
+
+function ShellIcon({ name }: { name: ShellIconName }) {
+  const paths: Record<ShellIconName, ReactNode> = {
+    analytics: <><path d="M3 20h18" /><path d="m5 16 4-5 4 3 6-8" /><circle cx="5" cy="16" r="1" /><circle cx="9" cy="11" r="1" /><circle cx="13" cy="14" r="1" /><circle cx="19" cy="6" r="1" /></>,
+    building: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 7h6M9 11h6M9 15h6M9 19h6" /></>,
+    clip: <path d="m9 17 7.6-7.6a3 3 0 1 0-4.2-4.2L4.8 12.8a5 5 0 0 0 7.1 7.1l7.2-7.2" />,
+    contact: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" /><path d="m14 17 5-5-5-5M19 12h-8" /></>,
+    dashboard: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
+    media: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h8M8 15h3M14 15h2M8 18h3M14 18h2" /></>,
+    phone: <path d="M7.4 3.7 5.2 4.8c-.9.5-1.3 1.5-1 2.4 1.7 5.4 6 9.7 11.4 11.4.9.3 1.9-.1 2.4-1l1.1-2.2a1.5 1.5 0 0 0-.6-2l-3-1.7a1.5 1.5 0 0 0-1.9.3l-1.2 1.5a12.2 12.2 0 0 1-2.1-1.7 12.2 12.2 0 0 1-1.7-2.1l1.5-1.2a1.5 1.5 0 0 0 .3-1.9l-1.7-3a1.5 1.5 0 0 0-2-.6Z" />,
+    release: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 7h6M9 11h6M9 15h6M9 19h6" /></>,
+    story: <><path d="M3 5.5A3.5 3.5 0 0 1 6.5 2H11v17H6.5A3.5 3.5 0 0 0 3 22Z" /><path d="M21 5.5A3.5 3.5 0 0 0 17.5 2H13v17h4.5A3.5 3.5 0 0 1 21 22Z" /></>,
+  };
+
+  return (
+    <svg aria-hidden="true" className="pr-shell-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+      {paths[name]}
+    </svg>
+  );
+}
+
 function PrSidebar({ open, page, onPage }: { open: boolean; page: PrPage; onPage: (page: PrPage) => void }) {
   const [analysisOpen, setAnalysisOpen] = useState(true);
   return (
     <aside className={`pr-sidebar${open ? ' is-open' : ''}`}>
       <nav aria-label="PR TIMESメニュー">
-        <button className={page === 'dashboard' ? 'is-active' : ''} onClick={() => onPage('dashboard')} type="button"><span>▦</span>ダッシュボード</button>
-        <button type="button"><span>▤</span>プレスリリース<i>›</i></button>
-        <button type="button"><span>▤</span>メディアリスト<i>›</i></button>
-        <button type="button"><span>▱</span>ストーリー<i>›</i></button>
-        <button onClick={() => setAnalysisOpen(!analysisOpen)} type="button"><span>⌁</span>分析データ<i>{analysisOpen ? '⌃' : '⌄'}</i></button>
+        <button className={page === 'dashboard' ? 'is-active' : ''} onClick={() => onPage('dashboard')} type="button"><ShellIcon name="dashboard" />ダッシュボード</button>
+        <button type="button"><ShellIcon name="release" />プレスリリース<i aria-hidden="true">›</i></button>
+        <button type="button"><ShellIcon name="media" />メディアリスト<i aria-hidden="true">›</i></button>
+        <button type="button"><ShellIcon name="story" />ストーリー<i aria-hidden="true">›</i></button>
+        <button aria-expanded={analysisOpen} onClick={() => setAnalysisOpen(!analysisOpen)} type="button"><ShellIcon name="analytics" />分析データ<i aria-hidden="true" className={analysisOpen ? 'is-open' : ''}>⌄</i></button>
         {analysisOpen && (
           <div className="pr-subnav">
             <button type="button">レポート</button>
             <button type="button">提携オンラインメディア</button>
             <button type="button">ソーシャル</button>
             <button type="button">広告換算ツール</button>
-            <button className={page === 'recommend' ? 'is-current' : ''} onClick={() => onPage('recommend')} type="button">✣ レコメンド <small>NEW</small></button>
+            <button className={page === 'recommend' ? 'is-current' : ''} onClick={() => onPage('recommend')} type="button">レコメンド <small>NEW</small></button>
           </div>
         )}
-        <button type="button"><span>⌕</span>Webクリッピング<i>›</i></button>
-        <button type="button"><span>▥</span>企業ページ<i>›</i></button>
+        <button type="button"><ShellIcon name="clip" />Webクリッピング<i aria-hidden="true">›</i></button>
+        <button type="button"><ShellIcon name="building" />企業ページ<i aria-hidden="true">›</i></button>
       </nav>
     </aside>
   );
@@ -1120,10 +1145,10 @@ function DashboardRecommendationBanner({
 
   const daysSinceLastPublished = dashboard?.meta.daysSinceLastPublished ?? null;
   const isStale = daysSinceLastPublished !== null && daysSinceLastPublished >= DASHBOARD_STALE_AFTER_DAYS;
-  const existingSuggestion = dashboard?.existingSuggestions[0];
+  const existingSuggestion = dashboard?.existingSuggestions?.[0];
   const showExistingSuggestion = isStale && Boolean(existingSuggestion);
   const layer: RecommendationLayer = showExistingSuggestion ? 'existing' : 'new';
-  const recommendation = showExistingSuggestion ? existingSuggestion : dashboard?.newOpportunities[0];
+  const recommendation = showExistingSuggestion ? existingSuggestion : dashboard?.newOpportunities?.[0];
 
   return (
     <section className="pr-recommend-banner" aria-label="おすすめのプレスリリース企画">
