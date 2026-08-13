@@ -1040,7 +1040,6 @@ function PrHeader({
       </div>
       <div className="pr-support"><small>サポートデスクはこちら</small><strong>☎ 03-6625-4684</strong></div>
       <button className="pr-contact" type="button">問い合わせフォーム</button>
-      <button className="pr-header-icon" type="button" aria-label="通知">♧</button>
       <HeaderCompanySwitcher
         companies={companies}
         loading={companiesLoading}
