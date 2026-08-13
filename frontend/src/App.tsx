@@ -552,7 +552,7 @@ function safeFileName(value: string): string {
   return value.replace(/[\u0000-\u001f\\/:*?"<>|]/g, '-').slice(0, 80);
 }
 
-export function App() {
+function RecommendationApp() {
   const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
   const [visibleCount, setVisibleCount] = useState(1);
   const [companyOpen, setCompanyOpen] = useState(false);
@@ -876,6 +876,11 @@ export function App() {
             <button className="secondary-button" disabled={actionBusy} onClick={saveDashboard} type="button"><Icon name="check" size={16} /> {dashboard.meta.saved ? '保存済み' : '編集内容を保存'}</button>
             <button className="secondary-button" disabled={actionBusy} onClick={openHistory} type="button"><Icon name="clock" size={16} /> 生成履歴</button>
           </div>
+          <button className="company-trigger" onClick={() => setCompanyOpen(true)} type="button">
+            <span className="company-avatar">{dashboard.company.initials}</span>
+            <span className="company-trigger__text"><small>分析中の企業</small><strong>{dashboard.company.name}</strong></span>
+            <Icon name="chevron" size={16} />
+          </button>
         </section>
         <section className={`recommendation-grid recommendation-grid--focus-${dashboard.meta.recommendedFocus}`}>
           <div className="past-panel">
@@ -991,6 +996,98 @@ export function App() {
         />
       )}
       {toast && <div className="toast" role="status"><Icon name="check" size={17} />{toast}</div>}
+    </div>
+  );
+}
+
+type PrPage = 'dashboard' | 'recommend';
+
+function PrHeader({ onMenu }: { onMenu: () => void }) {
+  return (
+    <header className="pr-header">
+      <button className="pr-mobile-menu" onClick={onMenu} type="button" aria-label="メニューを開く">☰</button>
+      <div className="pr-brand" aria-label="PR TIMES">PR TIMES</div>
+      <div className="pr-header-actions">
+        <button type="button">メディアリスト新規作成</button>
+        <button className="pr-primary-action" type="button">プレスリリース新規作成</button>
+      </div>
+      <div className="pr-support"><small>サポートデスクはこちら</small><strong>☎ 03-6625-4684</strong></div>
+      <button className="pr-contact" type="button">問い合わせフォーム</button>
+      <button className="pr-header-icon" type="button" aria-label="通知">♧</button>
+      <div className="pr-account"><span>株式会社ハッカソン</span><small>企業ID：99125</small></div>
+      <button className="pr-user" type="button" aria-label="アカウント">◯</button>
+    </header>
+  );
+}
+
+function PrSidebar({ open, page, onPage }: { open: boolean; page: PrPage; onPage: (page: PrPage) => void }) {
+  const [analysisOpen, setAnalysisOpen] = useState(true);
+  return (
+    <aside className={`pr-sidebar${open ? ' is-open' : ''}`}>
+      <nav aria-label="PR TIMESメニュー">
+        <button className={page === 'dashboard' ? 'is-active' : ''} onClick={() => onPage('dashboard')} type="button"><span>▦</span>ダッシュボード</button>
+        <button type="button"><span>▤</span>プレスリリース<i>›</i></button>
+        <button type="button"><span>▤</span>メディアリスト<i>›</i></button>
+        <button type="button"><span>▱</span>ストーリー<i>›</i></button>
+        <button onClick={() => setAnalysisOpen(!analysisOpen)} type="button"><span>⌁</span>分析データ<i>{analysisOpen ? '⌃' : '⌄'}</i></button>
+        {analysisOpen && (
+          <div className="pr-subnav">
+            <button type="button">レポート</button>
+            <button type="button">提携オンラインメディア</button>
+            <button type="button">ソーシャル</button>
+            <button type="button">広告換算ツール</button>
+            <button className={page === 'recommend' ? 'is-current' : ''} onClick={() => onPage('recommend')} type="button">✣ レコメンド <small>NEW</small></button>
+          </div>
+        )}
+        <button type="button"><span>⌕</span>Webクリッピング<i>›</i></button>
+        <button type="button"><span>▥</span>企業ページ<i>›</i></button>
+      </nav>
+    </aside>
+  );
+}
+
+function PrDashboard() {
+  const [open, setOpen] = useState([true, true]);
+  const notices = [
+    ['コンテンツ掲載基準を更新しました', '「日本初」「No.1」等の最上級表現の改定や、メディアタイアップ広告に関する基準の新設など、コンテンツ掲載基準を更新しました。'],
+    ['WebクリッピングでSNS投稿の取得が可能になりました', '指定したキーワードに基づきSNS上の投稿を毎日自動で取得し、一覧で確認できるようになりました。'],
+  ];
+  return (
+    <div className="pr-dashboard">
+      <p className="pr-breadcrumb">ダッシュボード</p>
+      <h1>ダッシュボード</h1>
+      <div className="pr-project"><strong>テスト4</strong><span>⌄　×</span></div>
+      {notices.map(([title, body], index) => (
+        <article className="pr-notice" key={title}>
+          <button onClick={() => setOpen((values) => values.map((value, item) => item === index ? !value : value))} type="button">
+            <h2>{title}</h2><span>{open[index] ? '⌃' : '⌄'}　×</span>
+          </button>
+          {open[index] && <p>{body}</p>}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+export function App() {
+  const [page, setPage] = useState<PrPage>('dashboard');
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const selectPage = (next: PrPage) => { setPage(next); setMobileOpen(false); };
+  return (
+    <div className="pr-shell">
+      <PrHeader onMenu={() => setMobileOpen(!mobileOpen)} />
+      {mobileOpen && <button className="pr-scrim" onClick={() => setMobileOpen(false)} type="button" aria-label="メニューを閉じる" />}
+      <PrSidebar open={mobileOpen} page={page} onPage={selectPage} />
+      <main className="pr-main">
+        {page === 'dashboard' ? (
+          <PrDashboard />
+        ) : (
+          <div className="pr-recommend-content">
+            <p className="pr-breadcrumb">分析データ　›　レコメンド</p>
+            <RecommendationApp />
+          </div>
+        )}
+      </main>
     </div>
   );
 }

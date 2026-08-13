@@ -2113,3 +2113,159 @@ main {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* PR TIMES shell: names are intentionally prefixed to isolate the embedded recommendation UI. */
+.pr-shell {
+  min-height: 100vh;
+  padding: 98px 0 0 356px;
+  background: #fff;
+  color: #111827;
+}
+
+.pr-header {
+  position: fixed;
+  z-index: 70;
+  inset: 0 0 auto;
+  height: 98px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 30px;
+  border-top: 2px solid #263e72;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
+}
+
+.pr-brand {
+  margin-right: auto;
+  color: #314c80;
+  font: 800 36px/1 Arial, sans-serif;
+  letter-spacing: -2.5px;
+  white-space: nowrap;
+}
+
+.pr-header button { font-family: "Noto Sans JP", sans-serif; cursor: pointer; }
+.pr-header-actions { display: flex; gap: 14px; }
+.pr-header-actions button,
+.pr-contact {
+  height: 54px;
+  padding: 0 18px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pr-header-actions .pr-primary-action { border-color: #2864f0; color: #2864f0; }
+.pr-support { min-width: 210px; display: flex; flex-direction: column; align-items: center; }
+.pr-support small { width: 100%; display: flex; align-items: center; gap: 9px; font-size: 11px; white-space: nowrap; }
+.pr-support small::before, .pr-support small::after { content: ''; height: 1px; flex: 1; background: #333; }
+.pr-support strong { font-size: 20px; }
+.pr-contact { height: 46px; }
+.pr-header-icon, .pr-user, .pr-mobile-menu { border: 0; background: transparent; font-size: 27px; }
+.pr-account { display: flex; flex-direction: column; align-items: center; font-size: 12px; white-space: nowrap; }
+.pr-account small { margin-top: 3px; }
+.pr-user { font-size: 34px; }
+.pr-mobile-menu { display: none; }
+
+.pr-sidebar {
+  position: fixed;
+  z-index: 60;
+  top: 98px;
+  bottom: 0;
+  left: 0;
+  width: 348px;
+  overflow-y: auto;
+  padding: 12px 18px 28px;
+  border-right: 8px solid #e5e5e5;
+  background: #fff;
+}
+.pr-sidebar nav { display: flex; flex-direction: column; }
+.pr-sidebar nav > button {
+  min-height: 67px;
+  display: grid;
+  grid-template-columns: 30px 1fr 20px;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 17px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #111;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.pr-sidebar nav > button:hover, .pr-sidebar nav > button.is-active { background: #e9e9e9; }
+.pr-sidebar nav > button span { font-size: 24px; text-align: center; }
+.pr-sidebar nav > button i { justify-self: end; font-style: normal; font-size: 22px; }
+.pr-subnav { display: flex; flex-direction: column; margin: -3px 0 5px 47px; }
+.pr-subnav button { min-height: 46px; display: flex; align-items: center; gap: 7px; padding: 7px 15px; border: 0; border-radius: 8px; background: transparent; color: #222; font-size: 14px; text-align: left; cursor: pointer; }
+.pr-subnav button:hover, .pr-subnav button.is-current { background: #edf3ff; color: #265ecb; }
+.pr-subnav small { margin-left: auto; padding: 2px 6px; border-radius: 99px; background: #e7efff; font-size: 9px; }
+
+.pr-main { width: auto; min-height: calc(100vh - 98px); margin: 0; }
+.pr-breadcrumb { margin: 0 0 55px; color: #555; font-size: 13px; }
+.pr-dashboard { width: min(1250px, calc(100% - 80px)); margin: 18px auto 70px; }
+.pr-dashboard > h1 { margin: 0 0 50px; color: #111; font-size: 34px; }
+.pr-project, .pr-notice { border: 1px solid #ddd; border-radius: 10px; background: #f7f7f7; }
+.pr-project { min-height: 88px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; padding: 0 23px; }
+.pr-project strong { font-size: 24px; }
+.pr-notice { margin-bottom: 30px; padding: 22px; }
+.pr-notice > button { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.pr-notice h2 { margin: 0; font-size: 24px; }
+.pr-notice p { margin: 18px 0 0; color: #444; font-size: 16px; line-height: 1.8; }
+
+.pr-recommend-content { padding: 17px 34px 50px; }
+.pr-recommend-content > .pr-breadcrumb { margin: 0 0 10px; }
+.pr-recommend-content > .app-shell { min-height: auto; }
+.pr-recommend-content .site-header { display: none; }
+.pr-recommend-content .app-shell > main { width: min(1320px, 100%); margin: 0 auto; }
+.pr-recommend-content .dashboard-toolbar { justify-content: space-between; padding-top: 16px; }
+.pr-recommend-content .dashboard-toolbar > .company-trigger { margin-left: auto; }
+.pr-recommend-content .status-page { min-height: calc(100vh - 220px); }
+.pr-recommend-content .site-footer .brand { display: none; }
+.pr-recommend-content .site-footer { grid-template-columns: 1fr auto; }
+.pr-scrim { display: none; }
+
+@media (max-width: 1380px) {
+  .pr-header { gap: 9px; padding: 0 20px; }
+  .pr-brand { font-size: 29px; }
+  .pr-header-actions button { padding: 0 12px; font-size: 12px; }
+  .pr-support { min-width: 180px; }
+  .pr-support strong { font-size: 17px; }
+  .pr-contact { padding: 0 12px; font-size: 12px; }
+  .pr-account { display: none; }
+}
+
+@media (max-width: 1060px) {
+  .pr-shell { padding-left: 280px; }
+  .pr-sidebar { width: 272px; }
+  .pr-sidebar nav > button { font-size: 15px; }
+  .pr-support, .pr-contact { display: none; }
+  .pr-recommend-content { padding-inline: 22px; }
+}
+
+@media (max-width: 760px) {
+  .pr-shell { padding: 72px 0 0; }
+  .pr-header { height: 72px; padding: 0 13px; }
+  .pr-mobile-menu { display: block; order: -1; }
+  .pr-brand { margin: 0; font-size: 23px; }
+  .pr-header-actions { margin-left: auto; }
+  .pr-header-actions button:first-child, .pr-header-icon, .pr-user { display: none; }
+  .pr-header-actions button { height: 42px; font-size: 10px; }
+  .pr-sidebar { top: 72px; width: min(330px, 88vw); border-right-width: 1px; transform: translateX(-105%); transition: transform .2s ease; box-shadow: 12px 0 40px rgba(0,0,0,.14); }
+  .pr-sidebar.is-open { transform: translateX(0); }
+  .pr-scrim { position: fixed; z-index: 55; inset: 72px 0 0; display: block; border: 0; background: rgba(17,24,39,.3); }
+  .pr-main { min-height: calc(100vh - 72px); }
+  .pr-dashboard { width: calc(100% - 30px); margin-top: 14px; }
+  .pr-breadcrumb { margin-bottom: 35px; }
+  .pr-dashboard > h1 { margin-bottom: 30px; font-size: 27px; }
+  .pr-notice h2 { font-size: 18px; }
+  .pr-notice p { font-size: 14px; }
+  .pr-recommend-content { padding: 14px 12px 35px; }
+  .pr-recommend-content .dashboard-toolbar { align-items: stretch; flex-direction: column; }
+  .pr-recommend-content .dashboard-toolbar > .company-trigger { width: 100%; margin-left: 0; }
+}
