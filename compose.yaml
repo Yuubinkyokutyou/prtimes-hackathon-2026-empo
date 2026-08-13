@@ -19,6 +19,21 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: development
+    restart: "no"
+    command: ["npm", "run", "migrate", "-w", "backend"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-team_empo}:${POSTGRES_PASSWORD:-local_password}@db:5432/${POSTGRES_DB:-team_empo}
+      DATABASE_SSL: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
   backend:
     build:
       context: .
@@ -46,8 +61,8 @@ services:
       - ./backend/src:/app/backend/src
       - ./database/production_subset/csv:/app/database/production_subset/csv:ro
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s

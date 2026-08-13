@@ -7,6 +7,7 @@ RUN npm ci
 
 FROM base AS development
 COPY backend backend
+COPY migrations migrations
 CMD ["npm", "run", "dev", "-w", "backend"]
 
 FROM base AS build
@@ -21,6 +22,7 @@ COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
 RUN npm ci --omit=dev --workspace backend --include-workspace-root=false && npm cache clean --force
 COPY --from=build /app/backend/dist backend/dist
+COPY migrations migrations
 USER node
 EXPOSE 3000
 CMD ["node", "backend/dist/index.js"]
