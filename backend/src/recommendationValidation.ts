@@ -20,6 +20,7 @@ const suggestionSchema = z.object({
   sourceTitle: z.string().max(1_000),
   sourceReleaseId: z.string().max(100),
   sourceUrl: z.string().max(2_000),
+  sourceImageUrl: z.string().max(2_000).optional().default(''),
   similarity: z.number().min(0).max(100),
 });
 
@@ -57,6 +58,7 @@ export const recommendationDashboardSchema = z.object({
     title: z.string().max(1_000),
     publishedAt: z.string(),
     sourceUrl: z.string().max(2_000),
+    imageUrl: z.string().max(2_000).optional().default(''),
     pageView: z.number().nonnegative(),
   })).max(100).optional(),
   existingSuggestions: z.array(suggestionSchema).max(20),

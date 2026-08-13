@@ -21,6 +21,7 @@ export type PastRelease = {
   likeCount: number;
   keywords: string[];
   sourceUrl: string;
+  imageUrl: string;
 };
 
 export type SimilarRelease = PastRelease & {
@@ -44,6 +45,7 @@ export type ExistingSuggestion = {
   sourceTitle: string;
   sourceReleaseId: string;
   sourceUrl: string;
+  sourceImageUrl: string;
   similarity: number;
 };
 
@@ -110,6 +112,7 @@ export type RecommendationHistoryItem = {
 
 export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | 'industry'> & {
   releaseCount: number;
+  lastPublishedAt: string;
 };
 
 export interface RecommendationContextProvider {

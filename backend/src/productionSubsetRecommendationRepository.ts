@@ -194,6 +194,7 @@ implements RecommendationContextProvider {
         likeCount: statistic?.likeCount ?? 0,
         keywords: releaseKeywords.get(key) ?? [],
         sourceUrl: releaseUrls.get(key) ?? '',
+        imageUrl: value(row, 'main_image_fastly') || value(row, 'main_image'),
       };
       releases.push({ ...release, companyId, companyName: company.name });
       const ownReleases = releasesByCompany.get(companyId) ?? [];
@@ -244,6 +245,7 @@ implements RecommendationContextProvider {
         initials: company.initials,
         industry: company.industry,
         releaseCount: releases.length,
+        lastPublishedAt: releases[0]!.publishedAt,
       }));
   }
 }

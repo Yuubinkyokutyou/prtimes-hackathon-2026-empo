@@ -39,6 +39,7 @@ type ReleaseRow = QueryResultRow & {
   like_count: number | null;
   keywords: string[] | null;
   source_url: string | null;
+  image_url: string | null;
 };
 
 type CompanySummaryRow = QueryResultRow & {
@@ -46,6 +47,7 @@ type CompanySummaryRow = QueryResultRow & {
   company_name: string;
   industry_name: string;
   release_count: string;
+  last_published_at: Date;
 };
 
 export class CompanyNotFoundError extends Error {
@@ -106,6 +108,7 @@ function toPastRelease(row: ReleaseRow): PastRelease {
     likeCount: row.like_count ?? 0,
     keywords: row.keywords ?? [],
     sourceUrl: row.source_url ?? '',
+    imageUrl: row.image_url ?? '',
   };
 }
 
@@ -118,6 +121,7 @@ const releaseSelect = `
     r.subtitle,
     r.lead_paragraph,
     r.body,
+    COALESCE(NULLIF(r.main_image_fastly, ''), r.main_image) AS image_url,
     COALESCE(rt.release_type_name, 'その他') AS genre,
     r.created_at,
     rs.page_view,
@@ -211,7 +215,10 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
         i.industry_name,
         COUNT(r.release_id) FILTER (
           WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
-        )::text AS release_count
+        )::text AS release_count,
+        MAX(r.created_at) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        ) AS last_published_at
       FROM company AS c
       INNER JOIN industry AS i ON i.industry_id = c.industry_id
       LEFT JOIN release AS r ON r.company_id = c.company_id
@@ -233,6 +240,7 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       initials: initialsFor(row.company_name),
       industry: row.industry_name,
       releaseCount: Number(row.release_count),
+      lastPublishedAt: row.last_published_at.toISOString(),
     }));
   }
 }

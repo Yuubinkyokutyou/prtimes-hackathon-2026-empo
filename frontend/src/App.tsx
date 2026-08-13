@@ -104,6 +104,14 @@ function formatDateTime(value: string): string {
     : '不明';
 }
 
+function sourceHost(value: string): string {
+  try {
+    return new URL(value).hostname.replace(/^www\./u, '');
+  } catch {
+    return '配信元サイト';
+  }
+}
+
 function SuggestionCard({
   suggestion,
   busy,
@@ -145,30 +153,11 @@ function SuggestionCard({
 
 function CompanyPanel({
   data,
-  companies,
-  companiesLoading,
-  changingCompanyId,
   onClose,
-  onSelectCompany,
 }: {
   data: RecommendationDashboard;
-  companies: CompanySummary[];
-  companiesLoading: boolean;
-  changingCompanyId: string | null;
   onClose: () => void;
-  onSelectCompany: (companyId: string) => void;
 }) {
-  const [query, setQuery] = useState('');
-  const filteredCompanies = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('ja-JP');
-    const matches = normalizedQuery
-      ? companies.filter((company) =>
-          `${company.name} ${company.industry}`.toLocaleLowerCase('ja-JP').includes(normalizedQuery),
-        )
-      : companies;
-    return matches.slice(0, 100);
-  }, [companies, query]);
-
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
       <aside
@@ -186,53 +175,6 @@ function CompanyPanel({
           <span className="company-avatar company-avatar--large">{data.company.initials}</span>
           <div><small>分析対象企業</small><h2>{data.company.name}</h2></div>
         </div>
-        <section className="company-picker" aria-label="企業を選択">
-          <div className="company-picker__heading">
-            <label htmlFor="company-search">企業を切り替える</label>
-            <small>
-              {companiesLoading
-                ? '読込中…'
-                : `${filteredCompanies.length}件表示 / 全${companies.length}社`}
-            </small>
-          </div>
-          <input
-            autoComplete="off"
-            id="company-search"
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="企業名・業種で検索"
-            type="search"
-            value={query}
-          />
-          <div className="company-picker__list" role="list">
-            {filteredCompanies.map((company) => {
-              const selected = company.id === data.company.id;
-              const changing = company.id === changingCompanyId;
-              return (
-                <button
-                  aria-current={selected ? 'true' : undefined}
-                  className={`company-option${selected ? ' is-selected' : ''}`}
-                  disabled={Boolean(changingCompanyId) || selected}
-                  key={company.id}
-                  onClick={() => onSelectCompany(company.id)}
-                  role="listitem"
-                  type="button"
-                >
-                  <span className="company-avatar company-option__avatar">{company.initials}</span>
-                  <span className="company-option__body">
-                    <strong>{company.name}</strong>
-                    <small>{company.industry}・配信{company.releaseCount}件</small>
-                  </span>
-                  <span className="company-option__state">
-                    {changing ? '提案を生成中…' : selected ? <Icon name="check" size={16} /> : <Icon name="arrow" size={15} />}
-                  </span>
-                </button>
-              );
-            })}
-            {!companiesLoading && filteredCompanies.length === 0 && (
-              <p className="company-picker__empty">該当する企業がありません</p>
-            )}
-          </div>
-        </section>
         <p className="company-panel__description">{data.company.description}</p>
         <dl className="company-details">
           <div><dt><Icon name="building" size={17} />業種</dt><dd>{data.company.industry}</dd></div>
@@ -298,9 +240,22 @@ function SuggestionModal({
         </div>
         <div className="detail-modal__source">
           <span>着想に使った過去配信</span>
-          {suggestion.sourceUrl
-            ? <a href={suggestion.sourceUrl} target="_blank" rel="noreferrer">{suggestion.sourceTitle} <Icon name="arrow" size={14} /></a>
-            : <strong>{suggestion.sourceTitle}</strong>}
+          {suggestion.sourceUrl ? (
+            <a className="source-preview" href={suggestion.sourceUrl} target="_blank" rel="noreferrer">
+              {suggestion.sourceImageUrl && (
+                <img
+                  alt=""
+                  src={suggestion.sourceImageUrl}
+                  onError={(event) => { event.currentTarget.hidden = true; }}
+                />
+              )}
+              <span className="source-preview__body">
+                <small>{sourceHost(suggestion.sourceUrl)}</small>
+                <strong>{suggestion.sourceTitle}</strong>
+                <em>元の配信を見る <Icon name="arrow" size={14} /></em>
+              </span>
+            </a>
+          ) : <strong>{suggestion.sourceTitle}</strong>}
         </div>
         <button className="primary-button primary-button--wide" onClick={() => onUse(suggestion)} type="button">
           この企画を記事にする <Icon name="arrow" />
@@ -444,20 +399,22 @@ function layerFromLastPublished(dashboard: RecommendationDashboard): Recommendat
   return days !== null && days >= 60 ? 'existing' : 'new';
 }
 
-function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLayer }) {
+function RecommendationApp({
+  companyId,
+  initialLayer,
+}: {
+  companyId?: string;
+  initialLayer?: RecommendationLayer;
+}) {
   const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
   const [visibleCount, setVisibleCount] = useState(1);
   const [visibleOpportunityCount, setVisibleOpportunityCount] = useState(1);
-  const [companyOpen, setCompanyOpen] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<ExistingSuggestion | null>(null);
   const [selectedOpportunity, setSelectedOpportunity] = useState<NewOpportunity | null>(null);
   const [selectedSourceReleaseId, setSelectedSourceReleaseId] = useState('');
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [companies, setCompanies] = useState<CompanySummary[]>([]);
-  const [companiesLoading, setCompaniesLoading] = useState(false);
-  const [changingCompanyId, setChangingCompanyId] = useState<string | null>(null);
   const [generationOpen, setGenerationOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<RecommendationHistoryItem[]>([]);
@@ -468,8 +425,11 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
 
   useEffect(() => {
     const controller = new AbortController();
-    const requestedCompanyId = new URLSearchParams(window.location.search).get('companyId');
-    const query = requestedCompanyId ? `?companyId=${encodeURIComponent(requestedCompanyId)}` : '';
+    setLoading(true);
+    setSelectedSuggestion(null);
+    setSelectedOpportunity(null);
+    setHistory([]);
+    const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : '';
     fetch(`${apiBaseUrl}/recommendations${query}`, {
       signal: controller.signal,
     })
@@ -491,31 +451,12 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [initialLayer]);
+  }, [companyId, initialLayer]);
 
   useEffect(() => {
-    if (!companyOpen || companies.length > 0) return;
-    const controller = new AbortController();
-    setCompaniesLoading(true);
-    fetch(`${apiBaseUrl}/recommendation-companies`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return (await response.json()) as { items: CompanySummary[] };
-      })
-      .then((data) => setCompanies(data.items))
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        setToast('企業一覧を取得できませんでした');
-      })
-      .finally(() => setCompaniesLoading(false));
-    return () => controller.abort();
-  }, [companyOpen, companies.length]);
-
-  useEffect(() => {
-    if (!companyOpen && !selectedSuggestion && !selectedOpportunity && !generationOpen && !historyOpen) return;
+    if (!selectedSuggestion && !selectedOpportunity && !generationOpen && !historyOpen) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setCompanyOpen(false);
         setSelectedSuggestion(null);
         setSelectedOpportunity(null);
         setGenerationOpen(false);
@@ -528,7 +469,7 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
       document.body.classList.remove('modal-open');
       window.removeEventListener('keydown', close);
     };
-  }, [companyOpen, selectedSuggestion, selectedOpportunity, generationOpen, historyOpen]);
+  }, [selectedSuggestion, selectedOpportunity, generationOpen, historyOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -656,37 +597,6 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
     }
   };
 
-  const selectCompany = async (companyId: string) => {
-    if (companyId === dashboard.company.id || changingCompanyId) return;
-    setChangingCompanyId(companyId);
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `${apiBaseUrl}/recommendations?companyId=${encodeURIComponent(companyId)}`,
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = (await response.json()) as RecommendationDashboard;
-      setDashboard(data);
-      setActiveLayer(layerFromLastPublished(data));
-      setVisibleCount(1);
-      setVisibleOpportunityCount(1);
-      setSelectedSourceReleaseId(data.sourceReleases[0]?.id ?? '');
-      setSelectedSuggestion(null);
-      setSelectedOpportunity(null);
-      setCompanyOpen(false);
-      setHistory([]);
-      const url = new URL(window.location.href);
-      url.searchParams.set('companyId', companyId);
-      window.history.replaceState({}, '', url);
-      setToast(`${data.company.name}に切り替えました`);
-    } catch {
-      setToast('企業の切り替えに失敗しました');
-    } finally {
-      setChangingCompanyId(null);
-      setLoading(false);
-    }
-  };
-
   const regenerateSuggestion = async (
     suggestion: ExistingSuggestion,
     sourceReleaseId = suggestion.sourceReleaseId,
@@ -771,14 +681,7 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
 
   return (
     <div className="app-shell">
-      <header className="site-header">
-        <Brand />
-        <button className="company-trigger" onClick={() => setCompanyOpen(true)} type="button">
-          <span className="company-avatar">{dashboard.company.initials}</span>
-          <span className="company-trigger__text"><small>分析中の企業</small><strong>{dashboard.company.name}</strong></span>
-          <Icon name="chevron" size={16} />
-        </button>
-      </header>
+      <header className="site-header"><Brand /></header>
 
       <main>
         <section className="dashboard-toolbar" aria-label="企画操作">
@@ -819,11 +722,6 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
             </button>
             <button className="secondary-button" disabled={actionBusy} onClick={openHistory} type="button"><Icon name="clock" size={16} /> 生成履歴</button>
           </div>
-          <button className="company-trigger" onClick={() => setCompanyOpen(true)} type="button">
-            <span className="company-avatar">{dashboard.company.initials}</span>
-            <span className="company-trigger__text"><small>分析中の企業</small><strong>{dashboard.company.name}</strong></span>
-            <Icon name="chevron" size={16} />
-          </button>
         </section>
         {dashboard.meta.generationNotice && (
           <div className="generation-notice" role="status">
@@ -948,16 +846,6 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
         </footer>
       </main>
 
-      {companyOpen && (
-        <CompanyPanel
-          companies={companies}
-          companiesLoading={companiesLoading}
-          changingCompanyId={changingCompanyId}
-          data={dashboard}
-          onClose={() => setCompanyOpen(false)}
-          onSelectCompany={selectCompany}
-        />
-      )}
       {selectedSuggestion && (
         <SuggestionModal
           key={selectedSuggestion.id}
@@ -997,7 +885,138 @@ function RecommendationApp({ initialLayer }: { initialLayer?: RecommendationLaye
 
 type PrPage = 'dashboard' | 'recommend';
 
-function PrHeader({ onMenu }: { onMenu: () => void }) {
+function daysSince(value: string): number | null {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
+}
+
+function HeaderCompanySwitcher({
+  companies,
+  loading,
+  profileLoading,
+  selectedCompanyId,
+  onSelect,
+  onViewProfile,
+}: {
+  companies: CompanySummary[];
+  loading: boolean;
+  profileLoading: boolean;
+  selectedCompanyId?: string;
+  onSelect: (companyId: string) => void;
+  onViewProfile: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [staleOnly, setStaleOnly] = useState(false);
+  const selected = companies.find((company) => company.id === selectedCompanyId) ?? companies[0];
+  const filteredCompanies = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('ja-JP');
+    return companies.filter((company) => {
+      const staleDays = daysSince(company.lastPublishedAt);
+      const matchesStale = !staleOnly || (staleDays !== null && staleDays >= 30);
+      const matchesQuery = !normalized || `${company.name} ${company.industry} ${company.id}`
+        .toLocaleLowerCase('ja-JP')
+        .includes(normalized);
+      return matchesStale && matchesQuery;
+    }).slice(0, 100);
+  }, [companies, query, staleOnly]);
+
+  return (
+    <div className="pr-company-switcher">
+      <button
+        className="pr-company-profile-link"
+        disabled={loading || !selected || profileLoading}
+        onClick={onViewProfile}
+        type="button"
+      >
+        <Icon name="building" size={13} /> {profileLoading ? '企業情報を読み込み中…' : '企業情報を見る'} <Icon name="arrow" size={13} />
+      </button>
+      <button
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className="pr-account"
+        disabled={loading || !selected}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className="pr-account__avatar">{selected?.initials ?? '企'}</span>
+        <span className="pr-account__identity">
+          <strong>{selected?.name ?? '企業を読み込み中'}</strong>
+          <small>{selected ? `企業ID：${selected.id}` : 'しばらくお待ちください'}</small>
+        </span>
+        <Icon name="chevron" size={15} />
+      </button>
+      {open && (
+        <>
+          <button className="pr-company-switcher__scrim" onClick={() => setOpen(false)} type="button" aria-label="企業選択を閉じる" />
+          <section className="pr-company-menu" aria-label="企業を切り替える">
+            <div className="pr-company-menu__heading">
+              <div><small>ANALYSIS COMPANY</small><h2>企業を切り替える</h2></div>
+              <button onClick={() => setOpen(false)} type="button" aria-label="閉じる"><Icon name="x" size={18} /></button>
+            </div>
+            <input
+              autoComplete="off"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="企業名・業種・企業IDで検索"
+              type="search"
+              value={query}
+            />
+            <label className="pr-company-menu__filter">
+              <input checked={staleOnly} onChange={(event) => setStaleOnly(event.target.checked)} type="checkbox" />
+              <span>30日以上投稿が止まっている企業のみ</span>
+              <small>{companies.filter((company) => (daysSince(company.lastPublishedAt) ?? -1) >= 30).length}社</small>
+            </label>
+            <div className="pr-company-menu__summary">{filteredCompanies.length}社を表示</div>
+            <div className="pr-company-menu__list">
+              {filteredCompanies.map((company) => {
+                const staleDays = daysSince(company.lastPublishedAt);
+                const active = company.id === selected?.id;
+                return (
+                  <button
+                    aria-current={active ? 'true' : undefined}
+                    className={active ? 'is-current' : ''}
+                    key={company.id}
+                    onClick={() => { onSelect(company.id); setOpen(false); }}
+                    type="button"
+                  >
+                    <span className="company-avatar">{company.initials}</span>
+                    <span className="pr-company-menu__company">
+                      <strong>{company.name}</strong>
+                      <small>{company.industry}・配信{company.releaseCount}件</small>
+                      <em>最終投稿 {new Date(company.lastPublishedAt).toLocaleDateString('ja-JP')}</em>
+                    </span>
+                    {staleDays !== null && staleDays >= 30 && <span className="pr-company-menu__stale">{staleDays}日停止</span>}
+                    {active && <Icon name="check" size={17} />}
+                  </button>
+                );
+              })}
+              {!loading && filteredCompanies.length === 0 && <p>該当する企業がありません</p>}
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PrHeader({
+  companies,
+  companiesLoading,
+  profileLoading,
+  onMenu,
+  onSelectCompany,
+  onViewCompanyProfile,
+  selectedCompanyId,
+}: {
+  companies: CompanySummary[];
+  companiesLoading: boolean;
+  profileLoading: boolean;
+  onMenu: () => void;
+  onSelectCompany: (companyId: string) => void;
+  onViewCompanyProfile: () => void;
+  selectedCompanyId?: string;
+}) {
   return (
     <header className="pr-header">
       <button className="pr-mobile-menu" onClick={onMenu} type="button" aria-label="メニューを開く">☰</button>
@@ -1009,8 +1028,14 @@ function PrHeader({ onMenu }: { onMenu: () => void }) {
       <div className="pr-support"><small>サポートデスクはこちら</small><strong>☎ 03-6625-4684</strong></div>
       <button className="pr-contact" type="button">問い合わせフォーム</button>
       <button className="pr-header-icon" type="button" aria-label="通知">♧</button>
-      <div className="pr-account"><span>株式会社ハッカソン</span><small>企業ID：99125</small></div>
-      <button className="pr-user" type="button" aria-label="アカウント">◯</button>
+      <HeaderCompanySwitcher
+        companies={companies}
+        loading={companiesLoading}
+        profileLoading={profileLoading}
+        onSelect={onSelectCompany}
+        onViewProfile={onViewCompanyProfile}
+        selectedCompanyId={selectedCompanyId}
+      />
     </header>
   );
 }
@@ -1044,8 +1069,10 @@ function PrSidebar({ open, page, onPage }: { open: boolean; page: PrPage; onPage
 const DASHBOARD_STALE_AFTER_DAYS = 30;
 
 function DashboardRecommendationBanner({
+  companyId,
   onOpenRecommendation,
 }: {
+  companyId?: string;
   onOpenRecommendation: (layer: RecommendationLayer) => void;
 }) {
   const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
@@ -1053,8 +1080,7 @@ function DashboardRecommendationBanner({
 
   useEffect(() => {
     const controller = new AbortController();
-    const requestedCompanyId = new URLSearchParams(window.location.search).get('companyId');
-    const query = requestedCompanyId ? `?companyId=${encodeURIComponent(requestedCompanyId)}` : '';
+    const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : '';
     fetch(`${apiBaseUrl}/recommendations${query}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1069,7 +1095,7 @@ function DashboardRecommendationBanner({
         setLoadError(true);
       });
     return () => controller.abort();
-  }, []);
+  }, [companyId]);
 
   const daysSinceLastPublished = dashboard?.meta.daysSinceLastPublished ?? null;
   const isStale = daysSinceLastPublished !== null && daysSinceLastPublished >= DASHBOARD_STALE_AFTER_DAYS;
@@ -1105,8 +1131,10 @@ function DashboardRecommendationBanner({
 }
 
 function PrDashboard({
+  companyId,
   onOpenRecommendation,
 }: {
+  companyId?: string;
   onOpenRecommendation: (layer: RecommendationLayer) => void;
 }) {
   const [open, setOpen] = useState([true, true]);
@@ -1118,7 +1146,7 @@ function PrDashboard({
     <div className="pr-dashboard">
       <p className="pr-breadcrumb">ダッシュボード</p>
       <h1>ダッシュボード</h1>
-      <DashboardRecommendationBanner onOpenRecommendation={onOpenRecommendation} />
+      <DashboardRecommendationBanner companyId={companyId} onOpenRecommendation={onOpenRecommendation} />
       <div className="pr-project"><strong>テスト4</strong><span>⌄　×</span></div>
       {notices.map(([title, body], index) => (
         <article className="pr-notice" key={title}>
@@ -1134,8 +1162,51 @@ function PrDashboard({
 
 export function App() {
   const [page, setPage] = useState<PrPage>('dashboard');
+  const [companies, setCompanies] = useState<CompanySummary[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [companyProfileDashboard, setCompanyProfileDashboard] = useState<RecommendationDashboard | null>(null);
+  const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | undefined>(
+    () => new URLSearchParams(window.location.search).get('companyId') ?? undefined,
+  );
   const [recommendationLayer, setRecommendationLayer] = useState<RecommendationLayer>();
   const [mobileOpen, setMobileOpen] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${apiBaseUrl}/recommendation-companies`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()) as { items: CompanySummary[] };
+      })
+      .then(({ items }) => {
+        setCompanies(items);
+        setSelectedCompanyId((current) => current && items.some((company) => company.id === current)
+          ? current
+          : items[0]?.id);
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) setCompanies([]);
+      })
+      .finally(() => setCompaniesLoading(false));
+    return () => controller.abort();
+  }, []);
+  const selectCompany = (companyId: string) => {
+    setSelectedCompanyId(companyId);
+    const url = new URL(window.location.href);
+    url.searchParams.set('companyId', companyId);
+    window.history.replaceState({}, '', url);
+  };
+  const openCompanyProfile = async () => {
+    if (!selectedCompanyId || companyProfileLoading) return;
+    setCompanyProfileLoading(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations?companyId=${encodeURIComponent(selectedCompanyId)}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setCompanyProfileDashboard((await response.json()) as RecommendationDashboard);
+    } finally {
+      setCompanyProfileLoading(false);
+    }
+  };
   const selectPage = (next: PrPage) => {
     setPage(next);
     setRecommendationLayer(undefined);
@@ -1148,19 +1219,33 @@ export function App() {
   };
   return (
     <div className="pr-shell">
-      <PrHeader onMenu={() => setMobileOpen(!mobileOpen)} />
+      <PrHeader
+        companies={companies}
+        companiesLoading={companiesLoading}
+        profileLoading={companyProfileLoading}
+        onMenu={() => setMobileOpen(!mobileOpen)}
+        onSelectCompany={selectCompany}
+        onViewCompanyProfile={() => void openCompanyProfile()}
+        selectedCompanyId={selectedCompanyId}
+      />
       {mobileOpen && <button className="pr-scrim" onClick={() => setMobileOpen(false)} type="button" aria-label="メニューを閉じる" />}
       <PrSidebar open={mobileOpen} page={page} onPage={selectPage} />
       <main className="pr-main">
         {page === 'dashboard' ? (
-          <PrDashboard onOpenRecommendation={openRecommendation} />
+          <PrDashboard companyId={selectedCompanyId} onOpenRecommendation={openRecommendation} />
         ) : (
           <div className="pr-recommend-content">
             <p className="pr-breadcrumb">分析データ　›　レコメンド</p>
-            <RecommendationApp initialLayer={recommendationLayer} />
+            <RecommendationApp companyId={selectedCompanyId} initialLayer={recommendationLayer} />
           </div>
         )}
       </main>
+      {companyProfileDashboard && (
+        <CompanyPanel
+          data={companyProfileDashboard}
+          onClose={() => setCompanyProfileDashboard(null)}
+        />
+      )}
     </div>
   );
 }
