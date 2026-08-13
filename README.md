@@ -20,6 +20,16 @@ Codex App で一度だけ **Settings > Local environments** を開き、この�
 
 `Run` は worktree ごとに Compose プロジェクト、ボリューム、PostgreSQL / API / frontend の空きポートを割り当てます。同時起動でポートが先に使われた場合も、別ポートで最大3回再試行します。割り当て結果は Git 管理外の `.worktree-dev.json` に保存されます。
 
+### Windows で setup script が実行ポリシーに拒否される場合
+
+Codex App は setup script を Windows PowerShell の一時 wrapper から実行します。`setup_wrapper.ps1` を読み込めないというエラーが出た場合は、**Windows PowerShell 5.1** を開いて次を実行してください（PowerShell 7 の設定とは別です）。
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+管理者権限は不要です。現在の設定は `Get-ExecutionPolicy -List` で確認できます。組織の `MachinePolicy` または `UserPolicy` が設定されている場合はそちらが優先されるため、変更せず管理者へ確認してください。
+
 ## 必要なもの
 
 - Docker Desktop（Docker Compose v2 を含む）
