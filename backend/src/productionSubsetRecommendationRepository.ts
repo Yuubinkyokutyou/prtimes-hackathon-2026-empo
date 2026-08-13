@@ -261,6 +261,7 @@ implements RecommendationContextProvider {
         industry: company.industry,
         releaseCount: releases.length,
         lastPublishedAt: releases[0]!.publishedAt,
+        hasCachedRecommendation: false,
       }));
   }
 }

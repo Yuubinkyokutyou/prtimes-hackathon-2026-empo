@@ -5,6 +5,7 @@ import { extractResponseText, openAiRequest } from './openAiClient.js';
 import {
   findCachedRecommendation,
   insertRecommendationGeneration,
+  listCachedRecommendationKeys,
 } from './recommendationCacheRepository.js';
 import {
   CompanyNotFoundError,
@@ -829,6 +830,7 @@ export function refreshEditedDashboardCache(dashboard: RecommendationDashboard):
 }
 
 export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
+  let companies: CompanySummary[];
   if (
     config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
     config.RECOMMENDATION_DATA_SOURCE === 'auto'
@@ -836,13 +838,34 @@ export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
     try {
       const companies = await productionSubsetContextProvider.listCompanies();
       if (companies.length > 0 || config.RECOMMENDATION_DATA_SOURCE === 'production_subset') {
-        return companies;
+        return markCompaniesWithCachedRecommendations(companies);
       }
     } catch (error) {
       if (config.RECOMMENDATION_DATA_SOURCE === 'production_subset') throw error;
     }
   }
-  return postgresContextProvider.listCompanies();
+  companies = await postgresContextProvider.listCompanies();
+  return markCompaniesWithCachedRecommendations(companies);
+}
+
+async function markCompaniesWithCachedRecommendations(
+  companies: CompanySummary[],
+): Promise<CompanySummary[]> {
+  if (!config.RECOMMENDATION_STORAGE_ENABLED) return companies;
+  try {
+    const cachedKeys = await listCachedRecommendationKeys();
+    const defaultOptions = normalizeGenerationOptions();
+    return companies.map((company) => ({
+      ...company,
+      hasCachedRecommendation: cachedKeys.has(cacheKeyFor(company.id, defaultOptions)),
+    }));
+  } catch (error) {
+    if (!storageWarningLogged) {
+      console.warn('Could not load recommendation cache availability.', error);
+      storageWarningLogged = true;
+    }
+    return companies;
+  }
 }
 
 export async function getRecommendationCompanyProfile(

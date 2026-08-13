@@ -912,18 +912,20 @@ function HeaderCompanySwitcher({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [staleOnly, setStaleOnly] = useState(false);
+  const [cachedOnly, setCachedOnly] = useState(true);
   const selected = companies.find((company) => company.id === selectedCompanyId) ?? companies[0];
   const filteredCompanies = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ja-JP');
     return companies.filter((company) => {
       const staleDays = daysSince(company.lastPublishedAt);
       const matchesStale = !staleOnly || (staleDays !== null && staleDays >= 30);
+      const matchesCache = !cachedOnly || company.hasCachedRecommendation;
       const matchesQuery = !normalized || `${company.name} ${company.industry} ${company.id}`
         .toLocaleLowerCase('ja-JP')
         .includes(normalized);
-      return matchesStale && matchesQuery;
+      return matchesStale && matchesCache && matchesQuery;
     }).slice(0, 100);
-  }, [companies, query, staleOnly]);
+  }, [cachedOnly, companies, query, staleOnly]);
 
   return (
     <div className="pr-company-switcher">
@@ -966,6 +968,11 @@ function HeaderCompanySwitcher({
               value={query}
             />
             <label className="pr-company-menu__filter">
+              <input checked={cachedOnly} onChange={(event) => setCachedOnly(event.target.checked)} type="checkbox" />
+              <span>提案キャッシュがある企業のみ</span>
+              <small>{companies.filter((company) => company.hasCachedRecommendation).length}社</small>
+            </label>
+            <label className="pr-company-menu__filter">
               <input checked={staleOnly} onChange={(event) => setStaleOnly(event.target.checked)} type="checkbox" />
               <span>30日以上投稿が止まっている企業のみ</span>
               <small>{companies.filter((company) => (daysSince(company.lastPublishedAt) ?? -1) >= 30).length}社</small>
@@ -989,6 +996,7 @@ function HeaderCompanySwitcher({
                       <small>{company.industry}・配信{company.releaseCount}件</small>
                       <em>最終投稿 {new Date(company.lastPublishedAt).toLocaleDateString('ja-JP')}</em>
                     </span>
+                    {company.hasCachedRecommendation && <span className="pr-company-menu__cached">提案あり</span>}
                     {staleDays !== null && staleDays >= 30 && <span className="pr-company-menu__stale">{staleDays}日停止</span>}
                     {active && <Icon name="check" size={17} />}
                   </button>

@@ -2422,6 +2422,7 @@ main {
 .pr-company-menu__company strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .pr-company-menu__company small, .pr-company-menu__company em { color: #6c818e; font-size: 10px; font-style: normal; }
 .pr-company-menu__stale { padding: 4px 7px; border-radius: 99px; background: #fff0e4; color: #a85219; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.pr-company-menu__cached { padding: 4px 7px; border-radius: 99px; background: #e5f5eb; color: #247047; font-size: 9px; font-weight: 800; white-space: nowrap; }
 .pr-company-menu__list > p { padding: 28px 8px; color: #718490; font-size: 12px; text-align: center; }
 .pr-mobile-menu { display: none; }
 

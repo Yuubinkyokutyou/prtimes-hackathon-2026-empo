@@ -65,6 +65,14 @@ export async function findCachedRecommendation(
   return dashboard ? parseRecommendationDashboard(dashboard) : undefined;
 }
 
+export async function listCachedRecommendationKeys(): Promise<Set<string>> {
+  await ensureRecommendationStorage();
+  const result = await pool.query<{ cache_key: string }>(
+    'SELECT DISTINCT cache_key FROM recommendation_generation',
+  );
+  return new Set(result.rows.map((row) => row.cache_key));
+}
+
 export async function insertRecommendationGeneration(
   cacheKey: string,
   companyId: string,

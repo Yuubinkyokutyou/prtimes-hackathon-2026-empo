@@ -113,6 +113,7 @@ export type RecommendationHistoryItem = {
 export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | 'industry'> & {
   releaseCount: number;
   lastPublishedAt: string;
+  hasCachedRecommendation: boolean;
 };
 
 export type CompanyProfileResult = {

@@ -295,6 +295,7 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       industry: row.industry_name,
       releaseCount: Number(row.release_count),
       lastPublishedAt: row.last_published_at.toISOString(),
+      hasCachedRecommendation: false,
     }));
   }
 }
