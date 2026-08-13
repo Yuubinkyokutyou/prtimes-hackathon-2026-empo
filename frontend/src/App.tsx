@@ -428,7 +428,9 @@ function RecommendationApp({
 
   useEffect(() => {
     const controller = new AbortController();
+    setDashboard(null);
     setLoading(true);
+    setLoadError('');
     setSelectedSuggestion(null);
     setSelectedOpportunity(null);
     setHistory([]);
@@ -487,7 +489,7 @@ function RecommendationApp({
         <main className="status-page" role="status">
           <Icon name={loadError ? 'x' : 'sparkles'} size={24} />
           <h1>{loadError ? 'データを表示できません' : '提案を準備しています'}</h1>
-          <p>{loadError || '企業情報と過去の配信を読み込んでいます。'}</p>
+          <p>{loadError || '企業情報と過去の配信をもとに提案を生成しています。通常1〜2分程度かかります。'}</p>
           {loadError && (
             <button className="primary-button" onClick={() => window.location.reload()} type="button">
               再読み込み
@@ -1091,6 +1093,8 @@ function DashboardRecommendationBanner({
 
   useEffect(() => {
     const controller = new AbortController();
+    setDashboard(null);
+    setLoadError(false);
     const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : '';
     fetch(`${apiBaseUrl}/recommendations${query}`, { signal: controller.signal })
       .then(async (response) => {
