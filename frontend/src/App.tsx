@@ -10,13 +10,6 @@ import {
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
-type ProposalExportContent = {
-  title: string;
-  contentOutline: string[];
-};
-
-type ProposalExportTarget = 'markdown' | 'word' | 'google_docs';
-
 type IconName =
   | 'arrow'
   | 'building'
@@ -251,16 +244,12 @@ function CompanyPanel({
 
 function SuggestionModal({
   suggestion,
-  exportBusy,
   onClose,
-  onExport,
   onSave,
   onUse,
 }: {
   suggestion: ExistingSuggestion;
-  exportBusy: boolean;
   onClose: () => void;
-  onExport: (proposal: ProposalExportContent, target: ProposalExportTarget) => void;
   onSave: (suggestion: ExistingSuggestion) => void;
   onUse: (suggestion: ExistingSuggestion) => void;
 }) {
@@ -326,11 +315,6 @@ function SuggestionModal({
             ? <a href={draft.sourceUrl} target="_blank" rel="noreferrer">{draft.sourceTitle} <Icon name="arrow" size={14} /></a>
             : <strong>{draft.sourceTitle}</strong>}
         </div>
-        <ProposalExportActions
-          busy={exportBusy}
-          onExport={(target) => onExport(draft, target)}
-          proposal={draft}
-        />
         <button className="primary-button primary-button--wide" onClick={() => onUse(draft)} type="button">
           この企画を記事にする <Icon name="arrow" />
         </button>
@@ -341,16 +325,12 @@ function SuggestionModal({
 
 function PitchModal({
   opportunity,
-  exportBusy,
   onClose,
-  onExport,
   onSave,
   onCopy,
 }: {
   opportunity: NewOpportunity;
-  exportBusy: boolean;
   onClose: () => void;
-  onExport: (proposal: ProposalExportContent, target: ProposalExportTarget) => void;
   onSave: (opportunity: NewOpportunity) => void;
   onCopy: (opportunity: NewOpportunity) => void;
 }) {
@@ -419,12 +399,6 @@ function PitchModal({
             </div>
           </div>
         </div>
-
-        <ProposalExportActions
-          busy={exportBusy}
-          onExport={(target) => onExport(draft, target)}
-          proposal={draft}
-        />
 
         <button className="primary-button primary-button--wide" onClick={() => onCopy(draft)} type="button">
           提案文をコピーする <Icon name="check" />
@@ -505,51 +479,11 @@ function HistoryPanel({
   );
 }
 
-function proposalToMarkdown(proposal: ProposalExportContent): string {
-  const outline = proposal.contentOutline.map(
-    (item, index) => `${index + 1}. ${item.replace(/\r?\n/g, '\n   ')}`,
-  );
-  return [`# ${proposal.title}`, '', '## おすすめ構成案・具体例', '', ...outline, ''].join('\n');
-}
+type RecommendationLayer = 'existing' | 'new';
 
-function ProposalExportActions({
-  busy,
-  onExport,
-  proposal,
-}: {
-  busy: boolean;
-  onExport: (target: ProposalExportTarget) => void;
-  proposal: ProposalExportContent;
-}) {
-  const disabled = busy || !proposal.title.trim() || !proposal.contentOutline.some((item) => item.trim());
-  return (
-    <section className="detail-export" aria-label="この企画の出力">
-      <div className="detail-export__copy">
-        <strong>この企画を出力</strong>
-        <span>タイトル＋おすすめ構成案・具体例のみ</span>
-      </div>
-      <div className="detail-export__actions">
-        <button className="secondary-button" disabled={disabled} onClick={() => onExport('markdown')} type="button">Markdown</button>
-        <button className="secondary-button" disabled={disabled} onClick={() => onExport('word')} type="button">Word</button>
-        <button className="secondary-button" disabled={disabled} onClick={() => onExport('google_docs')} type="button">Google Docs</button>
-      </div>
-    </section>
-  );
-}
-
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-function safeFileName(value: string): string {
-  return value.replace(/[\u0000-\u001f\\/:*?"<>|]/g, '-').slice(0, 80);
+function layerFromLastPublished(dashboard: RecommendationDashboard): RecommendationLayer {
+  const days = dashboard.meta.daysSinceLastPublished;
+  return days !== null && days >= 60 ? 'existing' : 'new';
 }
 
 function RecommendationApp() {
@@ -569,6 +503,7 @@ function RecommendationApp() {
   const [history, setHistory] = useState<RecommendationHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<RecommendationLayer>('new');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -583,6 +518,7 @@ function RecommendationApp() {
       })
       .then((data) => {
         setDashboard(data);
+        setActiveLayer(layerFromLastPublished(data));
         setLoadError('');
         setVisibleCount(1);
       })
@@ -747,6 +683,7 @@ function RecommendationApp() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = (await response.json()) as RecommendationDashboard;
       setDashboard(data);
+      setActiveLayer(layerFromLastPublished(data));
       setVisibleCount(1);
       setGenerationOpen(false);
       setHistory([]);
@@ -779,50 +716,14 @@ function RecommendationApp() {
     try {
       const response = await fetch(`${apiBaseUrl}/recommendations/history/${id}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setDashboard((await response.json()) as RecommendationDashboard);
+      const data = (await response.json()) as RecommendationDashboard;
+      setDashboard(data);
+      setActiveLayer(layerFromLastPublished(data));
       setHistoryOpen(false);
       setVisibleCount(1);
       setToast('履歴の提案を開きました');
     } catch {
       setToast('履歴を開けませんでした');
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const exportProposal = async (proposal: ProposalExportContent, target: ProposalExportTarget) => {
-    const exportableProposal = {
-      title: proposal.title.trim(),
-      contentOutline: proposal.contentOutline.map((item) => item.trim()).filter(Boolean),
-    };
-    const markdown = proposalToMarkdown(exportableProposal);
-    const fileBase = `${safeFileName(exportableProposal.title)}-おすすめ構成案`;
-    if (target === 'markdown') {
-      downloadBlob(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${fileBase}.md`);
-      setToast('表示中の企画をMarkdownで出力しました');
-      return;
-    }
-
-    const googleDocsWindow = target === 'google_docs' ? window.open('about:blank', '_blank') : null;
-    setActionBusy(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/recommendations/export/docx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposal: exportableProposal, target }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      downloadBlob(await response.blob(), `${fileBase}-${target === 'word' ? 'Word' : 'Google-Docs'}.docx`);
-      if (target === 'google_docs') {
-        await writeToClipboard(markdown);
-        if (googleDocsWindow) googleDocsWindow.location.href = 'https://docs.new';
-        setToast('表示中の企画だけをGoogle Docs用に出力しました');
-      } else {
-        setToast('表示中の企画をWordで出力しました');
-      }
-    } catch {
-      googleDocsWindow?.close();
-      setToast('ファイルを出力できませんでした');
     } finally {
       setActionBusy(false);
     }
@@ -839,6 +740,7 @@ function RecommendationApp() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = (await response.json()) as RecommendationDashboard;
       setDashboard(data);
+      setActiveLayer(layerFromLastPublished(data));
       setVisibleCount(1);
       setSelectedSuggestion(null);
       setPitchOpen(false);
@@ -857,6 +759,7 @@ function RecommendationApp() {
   };
 
   const opportunity = dashboard.newOpportunity;
+  const recommendedLayer = layerFromLastPublished(dashboard);
 
   return (
     <div className="app-shell">
@@ -871,7 +774,25 @@ function RecommendationApp() {
 
       <main>
         <section className="dashboard-toolbar" aria-label="企画操作">
-          <div>
+          <div className="dashboard-toolbar__actions">
+            <div className="layer-switcher" role="group" aria-label="表示する企画レイヤー">
+              <button
+                aria-pressed={activeLayer === 'existing'}
+                className={activeLayer === 'existing' ? 'is-active' : ''}
+                onClick={() => { setActiveLayer('existing'); setVisibleCount(1); }}
+                type="button"
+              >
+                <span>01</span> 過去記事活用
+              </button>
+              <button
+                aria-pressed={activeLayer === 'new'}
+                className={activeLayer === 'new' ? 'is-active' : ''}
+                onClick={() => setActiveLayer('new')}
+                type="button"
+              >
+                <span>02</span> 新しい切り口
+              </button>
+            </div>
             <button className="secondary-button" disabled={actionBusy} onClick={() => setGenerationOpen(true)} type="button"><Icon name="sparkles" size={16} /> 条件を指定して再生成</button>
             <button className="secondary-button" disabled={actionBusy} onClick={saveDashboard} type="button"><Icon name="check" size={16} /> {dashboard.meta.saved ? '保存済み' : '編集内容を保存'}</button>
             <button className="secondary-button" disabled={actionBusy} onClick={openHistory} type="button"><Icon name="clock" size={16} /> 生成履歴</button>
@@ -882,14 +803,14 @@ function RecommendationApp() {
             <Icon name="chevron" size={16} />
           </button>
         </section>
-        <section className={`recommendation-grid recommendation-grid--focus-${dashboard.meta.recommendedFocus}`}>
-          <div className="past-panel">
+        <section className={`recommendation-grid recommendation-grid--single recommendation-grid--layer-${activeLayer}`}>
+          {activeLayer === 'existing' && <div className="past-panel">
             <div className="section-heading">
               <div>
                 <p className="section-kicker"><span>01</span> BUILD ON YOUR STORY</p>
                 <h2>これまでの発信を、<br />次の記事へつなげる</h2>
               </div>
-              {dashboard.meta.recommendedFocus === 'existing' && <span className="focus-badge">いまのおすすめ</span>}
+              {recommendedLayer === 'existing' && <span className="focus-badge">いまのおすすめ</span>}
             </div>
 
             <div className="suggestion-list">
@@ -910,13 +831,13 @@ function RecommendationApp() {
               <span>{visibleCount === 1 ? `ほかの提案も見る（${dashboard.existingSuggestions.length - 1}件）` : '表示を閉じる'}</span>
               <span className={visibleCount === 1 ? '' : 'is-rotated'}><Icon name="chevron" /></span>
             </button>
-          </div>
+          </div>}
 
-          <aside className="discovery-panel">
+          {activeLayer === 'new' && <aside className="discovery-panel">
             <div className="discovery-panel__glow" aria-hidden="true" />
             <div className="discovery-panel__top">
               <p className="section-kicker section-kicker--light"><span>02</span> FIND A NEW STORY</p>
-              <span className="new-badge"><Icon name="sparkles" size={13} /> {dashboard.meta.recommendedFocus === 'new' ? 'いまのおすすめ' : 'NEW PERSPECTIVE'}</span>
+              {recommendedLayer === 'new' && <span className="new-badge"><Icon name="sparkles" size={13} /> いまのおすすめ</span>}
             </div>
             <h2>まだ語っていない、<br />あなたの会社の魅力</h2>
             <p className="discovery-panel__intro">過去の発信にはなかった、新しい切り口を見つけました。</p>
@@ -936,7 +857,7 @@ function RecommendationApp() {
             <button className="light-button" onClick={() => setPitchOpen(true)} type="button">
               この提案文を使う <Icon name="arrow" />
             </button>
-          </aside>
+          </aside>}
         </section>
 
         <footer className="site-footer">
@@ -961,20 +882,16 @@ function RecommendationApp() {
       )}
       {selectedSuggestion && (
         <SuggestionModal
-          exportBusy={actionBusy}
           suggestion={selectedSuggestion}
           onClose={() => setSelectedSuggestion(null)}
-          onExport={exportProposal}
           onSave={updateSuggestion}
           onUse={useSuggestion}
         />
       )}
       {pitchOpen && (
         <PitchModal
-          exportBusy={actionBusy}
           opportunity={opportunity}
           onClose={() => setPitchOpen(false)}
-          onExport={exportProposal}
           onSave={updateOpportunity}
           onCopy={copyPitch}
         />

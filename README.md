@@ -76,7 +76,7 @@ AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 �
 | `RECOMMENDATION_STALE_AFTER_DAYS` | 左側の過去記事活用案を優先する最終投稿日からの日数 | `60` |
 | `RECOMMENDATION_STORAGE_ENABLED` | 生成結果・履歴・編集内容をPostgreSQLへ保存 | `true` |
 
-OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。キャッシュと生成履歴は `recommendation_generation` テーブルへ永続化され、同じ企業・条件の結果はプロセス再起動後もTTL内なら再利用されます。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、同じ企業・条件の結果はプロセス再起動後もTTL内なら再利用されます。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
 
 ## データソース
 
@@ -88,7 +88,7 @@ OpenAI API キーはバックエンドだけが参照します。フロントエ
 npm run db:replace-production-subset -- --yes
 ```
 
-画面が企業IDを指定しない場合、配信件数が多い企業をDBから自動選択します。最終配信から60日以上空いている企業は左側の過去記事活用案、60日未満の企業は右側の新しい切り口を優先して生成します。しきい値は `RECOMMENDATION_STALE_AFTER_DAYS` で変更できます。
+画面が企業IDを指定しない場合、配信件数が多い企業をDBから自動選択します。最終配信から60日以上空いている企業は「01 過去記事活用」、60日未満の企業は「02 新しい切り口」を初期表示します。操作バーの01／02ボタンでいつでも表示を切り替えられます。
 
 特定企業を確認する場合は `http://localhost:5173/?companyId=<company_id>` のようにURLで企業IDを指定できます。画面の基本レイアウトは変わりません。
 
@@ -100,9 +100,8 @@ npm run db:replace-production-subset -- --yes
 - `GET /api/recommendations/history?companyId=<company_id>`: 生成履歴
 - `GET /api/recommendations/history/<generation_id>`: 保存した生成結果
 - `PUT /api/recommendations/history/<generation_id>`: 編集した企画の保存
-- `POST /api/recommendations/export/docx`: 詳細表示中の1企画のWord / Google Docs取込用DOCX出力
 
-画面では生成条件（優先企画、文体、読者、目的、追加情報）の指定、企画編集・保存、履歴復元、根拠と元記事リンクの確認、Word・Google Docs・Markdown出力ができます。出力は企画詳細から実行し、表示中の1企画の「タイトル」と「おすすめ構成案・具体例」だけを対象とします。Google Docs出力は取込用DOCXをダウンロードし、新しいGoogle Docsを開くと同時に貼り付け用テキストをクリップボードへコピーします。
+画面では生成条件（優先企画、文体、読者、目的、追加情報）の指定、企画編集・保存、履歴復元、根拠と元記事リンクの確認ができます。原稿生成やMarkdown・DOCXなどのファイル出力は行いません。
 
 ## ディレクトリ
 

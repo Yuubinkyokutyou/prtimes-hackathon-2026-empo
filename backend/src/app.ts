@@ -9,7 +9,6 @@ import {
   listRecommendationHistory,
   updateRecommendationHistoryItem,
 } from './recommendationCacheRepository.js';
-import { buildProposalDocx } from './recommendationDocument.js';
 import {
   getRecommendationDashboard,
   listRecommendationCompanies,
@@ -163,24 +162,6 @@ app.put('/api/recommendations/history/:id', async (request, response, next) => {
     }
     refreshEditedDashboardCache(saved);
     response.json(saved);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/api/recommendations/export/docx', async (request, response, next) => {
-  try {
-    const proposal = z.object({
-      title: z.string().trim().min(1).max(500),
-      contentOutline: z.array(z.string().trim().min(1).max(3_000)).min(1).max(20),
-    }).parse(request.body?.proposal);
-    const target = z.enum(['word', 'google_docs']).parse(request.body?.target ?? 'word');
-    const buffer = await buildProposalDocx(proposal, target);
-    const suffix = target === 'google_docs' ? 'google-docs' : 'word';
-    const fileName = `${proposal.title}-おすすめ構成案-${suffix}.docx`;
-    response.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    response.send(buffer);
   } catch (error) {
     next(error);
   }

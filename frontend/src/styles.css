@@ -262,6 +262,46 @@ main {
   flex-wrap: wrap;
 }
 
+.layer-switcher {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid #d7ddd7;
+  border-radius: 11px;
+  background: #f4f6f3;
+}
+
+.layer-switcher button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #68756d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.layer-switcher button span {
+  color: #8b978f;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.55rem;
+}
+
+.layer-switcher button.is-active {
+  background: var(--deep-green);
+  color: white;
+  box-shadow: 0 3px 9px rgba(24, 63, 52, 0.16);
+}
+
+.layer-switcher button.is-active span {
+  color: var(--lime);
+}
+
 .secondary-button {
   min-height: 38px;
   display: inline-flex;
@@ -722,6 +762,15 @@ main {
   align-items: start;
   gap: 24px;
   margin-top: 25px;
+}
+
+.recommendation-grid.recommendation-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.recommendation-grid--single .discovery-panel {
+  position: relative;
+  top: auto;
 }
 
 .past-panel,
@@ -1729,47 +1778,6 @@ main {
   font-size: 0.7rem;
 }
 
-.detail-export {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 16px 0 21px;
-  padding: 15px 16px;
-  border: 1px solid #dce3dc;
-  border-radius: 14px;
-  background: #fbfcfa;
-}
-
-.detail-export__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.detail-export__copy strong {
-  color: var(--ink);
-  font-size: 0.7rem;
-}
-
-.detail-export__copy span {
-  color: var(--soft-muted);
-  font-size: 0.61rem;
-  line-height: 1.55;
-}
-
-.detail-export__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-
-.detail-export__actions .secondary-button {
-  min-height: 34px;
-  padding-inline: 10px;
-}
-
 .primary-button--wide {
   width: 100%;
 }
@@ -1889,14 +1897,13 @@ main {
     width: 100%;
   }
 
-  .detail-export {
-    align-items: flex-start;
-    flex-direction: column;
+  .layer-switcher {
+    width: 100%;
   }
 
-  .detail-export__actions {
-    width: 100%;
-    justify-content: flex-start;
+  .layer-switcher button {
+    flex: 1;
+    justify-content: center;
   }
 
   .editor-form--grid {
