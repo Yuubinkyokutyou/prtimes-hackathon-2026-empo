@@ -16,6 +16,7 @@ import type {
   ExistingSuggestion,
   NewOpportunity,
   PastRelease,
+  ReferenceExample,
   RecommendationContext,
   RecommendationDashboard,
   RecommendationGenerationOptions,
@@ -169,6 +170,36 @@ function releaseSubject(value: string): string {
   return compact || compactReleaseTitle(value);
 }
 
+function toReferenceExample(release: ReferenceExample): ReferenceExample {
+  return {
+    companyName: release.companyName,
+    title: release.title,
+    summary: release.summary,
+    sourceUrl: release.sourceUrl,
+    imageUrl: release.imageUrl,
+  };
+}
+
+function templateReferenceExample(
+  source: PastRelease,
+  candidates: SimilarRelease[],
+): ReferenceExample | undefined {
+  const sourceKeywords = new Set(source.keywords);
+  const ranked = candidates
+    .map((candidate) => ({
+      candidate,
+      score:
+        (candidate.genre === source.genre ? 10 : 0)
+        + candidate.keywords.filter((keyword) => sourceKeywords.has(keyword)).length * 3,
+    }))
+    .sort((left, right) =>
+      right.score - left.score
+      || right.candidate.pageView - left.candidate.pageView
+      || right.candidate.likeCount - left.candidate.likeCount,
+    );
+  return ranked[0] ? toReferenceExample(ranked[0].candidate) : undefined;
+}
+
 function genericSuggestions(context: RecommendationContext): ExistingSuggestion[] {
   const releases = [...context.pastReleases].sort((left, right) => right.pageView - left.pageView);
   if (releases.length === 0) return [];
@@ -222,6 +253,7 @@ function genericSuggestions(context: RecommendationContext): ExistingSuggestion[
       sourceReleaseId: release.id,
       sourceUrl: release.sourceUrl,
       sourceImageUrl: release.imageUrl,
+      referenceExample: templateReferenceExample(release, context.candidateReleases),
       similarity: 0,
     };
   });
@@ -502,8 +534,20 @@ const regeneratedNewJsonSchema = {
 
 type RankedSimilarRelease = Pick<
   SimilarRelease,
-  'companyName' | 'title' | 'genre' | 'summary' | 'pageView' | 'likeCount'
+  'companyName' | 'title' | 'genre' | 'summary' | 'pageView' | 'likeCount' | 'sourceUrl' | 'imageUrl'
 > & { similarity: number };
+
+function promptSimilarExamples(examples: RankedSimilarRelease[]) {
+  return examples.map((example) => ({
+    companyName: example.companyName,
+    title: example.title,
+    genre: example.genre,
+    summary: example.summary,
+    pageView: example.pageView,
+    likeCount: example.likeCount,
+    similarity: example.similarity,
+  }));
+}
 
 async function generateCopy(
   context: RecommendationContext,
@@ -550,7 +594,7 @@ async function generateCopy(
               postingCadence: cadence,
               generationConditions: options,
               pastReleases: promptReleases,
-              similarExamples,
+              similarExamples: promptSimilarExamples(similarExamples),
             }),
           },
         ],
@@ -572,6 +616,7 @@ async function generateCopy(
 async function generateExistingItemCopy(
   context: RecommendationContext,
   source: PastRelease,
+  similarExamples: RankedSimilarRelease[],
   options: RecommendationGenerationOptions,
   currentTitle: string,
 ) {
@@ -583,7 +628,7 @@ async function generateExistingItemCopy(
         role: 'system',
         content: [{
           type: 'input_text',
-          text: 'あなたは中小企業の広報担当と企画を考える編集者です。指定された過去配信を元に、現在案とは異なる続報企画を1件だけ作ってください。完成原稿ではなく簡潔な企画メモにします。タイトルは誰の何を扱うかが分かる普通の日本語にし、抽象的な決まり文句や未確認の実績は使いません。contentOutlineは「見出し｜記事に入れる内容」の形式で3件にしてください。',
+          text: 'あなたは中小企業の広報担当と企画を考える編集者です。指定された過去配信を元に、現在案とは異なる続報企画を1件だけ作ってください。完成原稿ではなく簡潔な企画メモにします。タイトルは誰の何を扱うかが分かる普通の日本語にし、抽象的な決まり文句や未確認の実績は使いません。contentOutlineは「見出し｜記事に入れる内容」の形式で3件にしてください。他社事例は切り口の参考に限り、その社名・商品名・実績を自社の事実にしません。',
         }],
       },
       {
@@ -593,6 +638,7 @@ async function generateExistingItemCopy(
           text: JSON.stringify({
             company: context.company,
             sourceRelease: source,
+            similarExamples: promptSimilarExamples(similarExamples),
             currentTitle,
             generationConditions: options,
           }),
@@ -722,6 +768,34 @@ async function scoreSuggestions(
   });
 }
 
+async function matchReferenceExamples(
+  suggestions: Array<{ genre: string; title: string; summary: string; contentOutline: string[] }>,
+  candidates: RankedSimilarRelease[],
+): Promise<Array<ReferenceExample | undefined>> {
+  if (suggestions.length === 0 || candidates.length === 0) return suggestions.map(() => undefined);
+  const suggestionTexts = suggestions.map((suggestion) =>
+    [suggestion.genre, suggestion.title, suggestion.summary, ...suggestion.contentOutline].join('\n'),
+  );
+  const candidateTexts = candidates.map((candidate) =>
+    [candidate.genre, candidate.title, candidate.summary].join('\n'),
+  );
+  const vectors = await createCachedEmbeddings([...suggestionTexts, ...candidateTexts]);
+  const suggestionVectors = vectors.slice(0, suggestions.length);
+  const candidateVectors = vectors.slice(suggestions.length);
+
+  return suggestionVectors.map((suggestionVector) => {
+    const best = candidates.reduce<{ candidate: RankedSimilarRelease; similarity: number } | undefined>(
+      (current, candidate, index) => {
+        const similarity = cosineSimilarity(suggestionVector, candidateVectors[index] ?? []);
+        if (!current || similarity > current.similarity) return { candidate, similarity };
+        return current;
+      },
+      undefined,
+    );
+    return best ? toReferenceExample(best.candidate) : undefined;
+  });
+}
+
 function releaseEmbeddingText(release: PastRelease): string {
   return [release.genre, release.title, release.summary, release.keywords.join(' ')].join('\n');
 }
@@ -746,6 +820,8 @@ async function rankSimilarExamples(context: RecommendationContext): Promise<Rank
       summary: release.summary,
       pageView: release.pageView,
       likeCount: release.likeCount,
+      sourceUrl: release.sourceUrl,
+      imageUrl: release.imageUrl,
       similarity: Math.round(
         Math.max(...ownVectors.map((ownVector) => cosineSimilarity(ownVector, candidateVectors[index] ?? []))) * 100,
       ),
@@ -762,7 +838,7 @@ let storageWarningLogged = false;
 function cacheKeyFor(companyId: string, options: RecommendationGenerationOptions): string {
   const digest = createHash('sha256')
     .update(JSON.stringify({
-      version: 5,
+      version: 6,
       companyId,
       options,
       dataSource: config.RECOMMENDATION_DATA_SOURCE,
@@ -927,6 +1003,7 @@ async function generateDashboard(
     const similarExamples = await rankSimilarExamples(loaded.context);
     const generated = await generateCopy(loaded.context, similarExamples, cadence, options);
     const similarities = await scoreSuggestions(generated.existingSuggestions, loaded.context.pastReleases);
+    const referenceExamples = await matchReferenceExamples(generated.existingSuggestions, similarExamples);
     const releaseById = new Map(loaded.context.pastReleases.map((release) => [release.id, release]));
     const defaultSource = loaded.context.pastReleases[0]!;
     const existingSuggestions = generated.existingSuggestions
@@ -938,6 +1015,7 @@ async function generateDashboard(
           sourceTitle: source.title,
           sourceUrl: source.sourceUrl,
           sourceImageUrl: source.imageUrl,
+          referenceExample: referenceExamples[index],
           similarity: similarities[index] ?? 0,
         };
       })
@@ -993,12 +1071,20 @@ export async function regenerateRecommendationItem(companyId: string, input: unk
     }
 
     try {
-      const generated = await generateExistingItemCopy(loaded.context, source, options, request.currentTitle);
+      const similarExamples = await rankSimilarExamples(loaded.context);
+      const generated = await generateExistingItemCopy(
+        loaded.context,
+        source,
+        similarExamples,
+        options,
+        request.currentTitle,
+      );
       const id = `release-${source.id}-${randomUUID()}`;
       const [similarity = 0] = await scoreSuggestions(
         [{ ...generated, id, sourceReleaseId: source.id }],
         [source],
       );
+      const [referenceExample] = await matchReferenceExamples([generated], similarExamples);
       const item: ExistingSuggestion = {
         ...generated,
         id,
@@ -1006,6 +1092,7 @@ export async function regenerateRecommendationItem(companyId: string, input: unk
         sourceTitle: source.title,
         sourceUrl: source.sourceUrl,
         sourceImageUrl: source.imageUrl,
+        referenceExample,
         similarity,
       };
       return { layer: 'existing' as const, item, mode: 'openai' as const, generatedAt };

@@ -257,6 +257,32 @@ function SuggestionModal({
             </a>
           ) : <strong>{suggestion.sourceTitle}</strong>}
         </div>
+        {suggestion.referenceExample && (
+          <div className="detail-modal__reference">
+            <span>他社では、こんな方向性で発信しています</span>
+            {suggestion.referenceExample.sourceUrl ? (
+              <a className="source-preview" href={suggestion.referenceExample.sourceUrl} target="_blank" rel="noreferrer">
+                {suggestion.referenceExample.imageUrl && (
+                  <img
+                    alt=""
+                    src={suggestion.referenceExample.imageUrl}
+                    onError={(event) => { event.currentTarget.hidden = true; }}
+                  />
+                )}
+                <span className="source-preview__body">
+                  <small>{suggestion.referenceExample.companyName}</small>
+                  <strong>{suggestion.referenceExample.title}</strong>
+                  <em>参考記事を見る <Icon name="arrow" size={14} /></em>
+                </span>
+              </a>
+            ) : (
+              <span className="reference-example__body">
+                <small>{suggestion.referenceExample.companyName}</small>
+                <strong>{suggestion.referenceExample.title}</strong>
+              </span>
+            )}
+          </div>
+        )}
         <button className="primary-button primary-button--wide" onClick={() => onUse(suggestion)} type="button">
           この企画を記事にする <Icon name="arrow" />
         </button>

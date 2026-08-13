@@ -22,6 +22,13 @@ export type ExistingSuggestion = {
   sourceReleaseId?: string;
   sourceUrl: string;
   sourceImageUrl: string;
+  referenceExample?: {
+    companyName: string;
+    title: string;
+    summary: string;
+    sourceUrl: string;
+    imageUrl: string;
+  };
   similarity: number;
 };
 

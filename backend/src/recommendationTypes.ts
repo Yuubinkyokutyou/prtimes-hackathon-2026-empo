@@ -28,6 +28,11 @@ export type SimilarRelease = PastRelease & {
   companyName: string;
 };
 
+export type ReferenceExample = Pick<
+  SimilarRelease,
+  'companyName' | 'title' | 'summary' | 'sourceUrl' | 'imageUrl'
+>;
+
 export type RecommendationContext = {
   company: CompanyProfile;
   pastReleases: PastRelease[];
@@ -46,6 +51,7 @@ export type ExistingSuggestion = {
   sourceReleaseId: string;
   sourceUrl: string;
   sourceImageUrl: string;
+  referenceExample?: ReferenceExample;
   similarity: number;
 };
 

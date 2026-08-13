@@ -9,6 +9,14 @@ const generationOptionsSchema = z.object({
   additionalContext: z.string().max(2_000),
 });
 
+const referenceExampleSchema = z.object({
+  companyName: z.string().min(1).max(500),
+  title: z.string().min(1).max(1_000),
+  summary: z.string().max(4_000),
+  sourceUrl: z.string().max(2_000),
+  imageUrl: z.string().max(2_000),
+});
+
 const suggestionSchema = z.object({
   id: z.string().min(1),
   genre: z.string().min(1).max(100),
@@ -21,6 +29,7 @@ const suggestionSchema = z.object({
   sourceReleaseId: z.string().max(100),
   sourceUrl: z.string().max(2_000),
   sourceImageUrl: z.string().max(2_000).optional().default(''),
+  referenceExample: referenceExampleSchema.optional(),
   similarity: z.number().min(0).max(100),
 });
 

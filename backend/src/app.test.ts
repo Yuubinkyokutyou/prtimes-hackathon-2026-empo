@@ -55,12 +55,19 @@ test('GET /api/recommendations uses the configured CSV data source', async () =>
   const data = (await response.json()) as {
     company: { name: string };
     sourceReleases: Array<{ id: string; title: string; publishedAt: string }>;
-    existingSuggestions: Array<{ title: string; summary: string; sourceEvidence?: string }>;
+    existingSuggestions: Array<{
+      title: string;
+      summary: string;
+      sourceEvidence?: string;
+      referenceExample?: { companyName: string; title: string };
+    }>;
     newOpportunities: Array<{ genre: string; title: string; summary: string; pitch: string; interviewQuestions?: string[] }>;
     meta: { dataSource: string; mode: string; generationId: string; saved: boolean };
   };
   assert.equal(data.company.name, '株式会社テスト空');
   assert.equal(data.existingSuggestions.length, 4);
+  assert(data.existingSuggestions.every((item) => item.referenceExample?.companyName === '株式会社テスト森'));
+  assert(data.existingSuggestions.every((item) => item.referenceExample?.title === '地域交流会を開催'));
   assert.equal(data.sourceReleases.length, 1);
   assert.equal(data.newOpportunities.length, 3);
   assert.equal(data.newOpportunities[0]?.genre, '人・カルチャー');
