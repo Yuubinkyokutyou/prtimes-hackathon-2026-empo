@@ -308,7 +308,6 @@ function SuggestionModal({
             <div><h3>おすすめ構成案・具体例</h3><ol>{draft.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
           </div>
         </div>
-        <div className="evidence-box"><strong>提案の根拠</strong><p>{draft.sourceEvidence}</p></div>
         <div className="detail-modal__source">
           <span>着想に使った過去配信</span>
           {draft.sourceUrl
@@ -337,14 +336,10 @@ function PitchModal({
   const [draft, setDraft] = useState(opportunity);
   const [editing, setEditing] = useState(false);
 
-  const updateList = (
-    key: 'contentOutline' | 'interviewQuestions',
-    index: number,
-    value: string,
-  ) => {
+  const updateOutline = (index: number, value: string) => {
     setDraft((current) => ({
       ...current,
-      [key]: current[key].map((item, itemIndex) => itemIndex === index ? value : item),
+      contentOutline: current.contentOutline.map((item, itemIndex) => itemIndex === index ? value : item),
     }));
   };
 
@@ -373,8 +368,7 @@ function PitchModal({
             <label>概要<textarea rows={3} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} /></label>
             <label>企画理由<textarea rows={3} value={draft.opportunityReason} onChange={(event) => setDraft({ ...draft, opportunityReason: event.target.value })} /></label>
             <label>提案文<textarea rows={6} value={draft.pitch} onChange={(event) => setDraft({ ...draft, pitch: event.target.value })} /></label>
-            <fieldset><legend>構成案</legend>{draft.contentOutline.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateList('contentOutline', index, event.target.value)} />)}</fieldset>
-            <fieldset><legend>インタビュー質問</legend>{draft.interviewQuestions.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateList('interviewQuestions', index, event.target.value)} />)}</fieldset>
+            <fieldset><legend>構成案</legend>{draft.contentOutline.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateOutline(index, event.target.value)} />)}</fieldset>
             <button className="secondary-button" onClick={() => { onSave(draft); setEditing(false); }} type="button">編集内容を反映</button>
           </div>
         ) : <h2>{draft.title}</h2>}
@@ -384,18 +378,18 @@ function PitchModal({
         </div>
 
         <div className="detail-grid">
+          <div className="detail-block detail-block--accent">
+            <span className="detail-block__icon"><Icon name="sparkles" size={18} /></span>
+            <div>
+              <h3>なぜ、これが魅力になる？</h3>
+              <p>{draft.opportunityReason}</p>
+            </div>
+          </div>
           <div className="detail-block">
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
             <div>
               <h3>おすすめ構成案・具体例</h3>
               <ol>{draft.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol>
-            </div>
-          </div>
-          <div className="detail-block">
-            <span className="detail-block__icon"><Icon name="users" size={18} /></span>
-            <div>
-              <h3>インタビュー質問</h3>
-              <ul>{draft.interviewQuestions.map((item) => <li key={item}>{item}</li>)}</ul>
             </div>
           </div>
         </div>
@@ -599,9 +593,6 @@ function RecommendationApp() {
       '',
       'おすすめ構成案・具体例',
       ...opportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
-      '',
-      'インタビュー質問',
-      ...opportunity.interviewQuestions.map((item) => `- ${item}`),
     ].join('\n');
     try {
       const copied = await writeToClipboard(copyText);
@@ -808,7 +799,7 @@ function RecommendationApp() {
             <div className="section-heading">
               <div>
                 <p className="section-kicker"><span>01</span> BUILD ON YOUR STORY</p>
-                <h2>これまでの発信を、<br />次の記事へつなげる</h2>
+                <h2>過去の発信を広げる</h2>
               </div>
               {recommendedLayer === 'existing' && <span className="focus-badge">いまのおすすめ</span>}
             </div>
@@ -837,9 +828,8 @@ function RecommendationApp() {
             <div className="discovery-panel__glow" aria-hidden="true" />
             <div className="discovery-panel__top">
               <p className="section-kicker section-kicker--light"><span>02</span> FIND A NEW STORY</p>
-              {recommendedLayer === 'new' && <span className="new-badge"><Icon name="sparkles" size={13} /> いまのおすすめ</span>}
             </div>
-            <h2>まだ語っていない、<br />あなたの会社の魅力</h2>
+            <h2>新しい切り口を見つける</h2>
             <p className="discovery-panel__intro">過去の発信にはなかった、新しい切り口を見つけました。</p>
 
             <div className="opportunity-card">
@@ -847,11 +837,6 @@ function RecommendationApp() {
               <p className="micro-label micro-label--light">{opportunity.eyebrow}</p>
               <h3>{opportunity.title}</h3>
               <p>{opportunity.summary}</p>
-            </div>
-
-            <div className="reason-box">
-              <span className="reason-box__icon"><Icon name="sparkles" size={17} /></span>
-              <div><strong>なぜ、これが魅力になる？</strong><p>{opportunity.opportunityReason}</p></div>
             </div>
 
             <button className="light-button" onClick={() => setPitchOpen(true)} type="button">
