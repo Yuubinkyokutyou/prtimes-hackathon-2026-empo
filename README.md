@@ -40,30 +40,9 @@ npm test           # backend のテスト
 
 ## EC2 + RDS へのデプロイ
 
-EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL は含まれません。
+EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL は含まれず、RDS for PostgreSQL に接続します。
 
-1. RDS for PostgreSQL を作成し、EC2 のセキュリティグループから RDS の 5432/TCP への接続を許可します。
-2. RDS に `init.sql` を一度だけ適用します。
-
-   ```bash
-   psql "host=<RDS_ENDPOINT> port=5432 dbname=<DB_NAME> user=<DB_USER> sslmode=require" -f init.sql
-   ```
-
-3. EC2 上で `.env.ec2.example` を `.env.ec2` にコピーし、`DATABASE_URL` と `CORS_ORIGIN` を変更します。
-4. 起動します。
-
-   ```bash
-   docker compose --env-file .env.ec2 -f compose.ec2.yaml up -d --build
-   ```
-
-5. 確認します。
-
-   ```bash
-   curl http://localhost/api/health
-   curl http://localhost/api/health/db
-   ```
-
-本番では EC2 の 80 番ポートを直接公開するより、ALB または HTTPS を設定したリバースプロキシを前段に置く構成を推奨します。RDS は public access を無効にし、認証情報は AWS Systems Manager Parameter Store または Secrets Manager で管理してください。
+AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 のセットアップ、RDS の初期化、デプロイ、疎通確認までの手順は [EC2 + RDS デプロイ手順](docs/EC2_RDS_DEPLOY.md) を参照してください。
 
 ## 環境変数
 
@@ -71,7 +50,7 @@ EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL �
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL 接続文字列 | `postgresql://user:pass@db:5432/app` |
 | `DATABASE_SSL` | RDS への TLS 接続 | `true` |
-| `DATABASE_SSL_REJECT_UNAUTHORIZED` | 証明書検証（通常は `true`） | `true` |
+| `DATABASE_SSL_REJECT_UNAUTHORIZED` | 証明書検証（ハッカソンは `false`、本番は `true`） | `false` |
 | `PORT` | API の待受ポート | `3000` |
 | `CORS_ORIGIN` | 許可するフロントの Origin（カンマ区切り可） | `https://example.com` |
 | `VITE_API_BASE_URL` | ブラウザから見た API のパス | `/api` |
