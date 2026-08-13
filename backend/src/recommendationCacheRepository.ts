@@ -45,6 +45,12 @@ export function ensureRecommendationStorage(): Promise<void> {
       CREATE INDEX IF NOT EXISTS recommendation_generation_company_idx
       ON recommendation_generation (company_id, created_at DESC)
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recommendation_cache_state (
+        singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+        invalidated_at timestamptz NOT NULL DEFAULT '-infinity'::timestamptz
+      )
+    `);
   })();
   return schemaPromise;
 }
@@ -57,6 +63,10 @@ export async function findCachedRecommendation(
     `SELECT dashboard
      FROM recommendation_generation
      WHERE cache_key = $1
+       AND created_at > COALESCE(
+         (SELECT invalidated_at FROM recommendation_cache_state WHERE singleton = true),
+         '-infinity'::timestamptz
+       )
      ORDER BY created_at DESC
      LIMIT 1`,
     [cacheKey],
@@ -68,9 +78,26 @@ export async function findCachedRecommendation(
 export async function listCachedRecommendationKeys(): Promise<Set<string>> {
   await ensureRecommendationStorage();
   const result = await pool.query<{ cache_key: string }>(
-    'SELECT DISTINCT cache_key FROM recommendation_generation',
+    `SELECT DISTINCT cache_key
+     FROM recommendation_generation
+     WHERE created_at > COALESCE(
+       (SELECT invalidated_at FROM recommendation_cache_state WHERE singleton = true),
+       '-infinity'::timestamptz
+     )`,
   );
   return new Set(result.rows.map((row) => row.cache_key));
+}
+
+export async function invalidateRecommendationCache(): Promise<Date> {
+  await ensureRecommendationStorage();
+  const result = await pool.query<{ invalidated_at: Date }>(
+    `INSERT INTO recommendation_cache_state (singleton, invalidated_at)
+     VALUES (true, CURRENT_TIMESTAMP)
+     ON CONFLICT (singleton) DO UPDATE
+       SET invalidated_at = EXCLUDED.invalidated_at
+     RETURNING invalidated_at`,
+  );
+  return result.rows[0]!.invalidated_at;
 }
 
 export async function insertRecommendationGeneration(

@@ -96,6 +96,8 @@ AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 �
 
 OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、同じ企業・条件の結果は期限なくキャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、プロセス再起動後も再利用されます。明示的な再生成操作はキャッシュを使わず、新しい提案を生成します。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
 
+EC2/RDS本番環境の全提案キャッシュをクリアする場合は、リポジトリのルートで `./scripts/clear-recommendation-cache-production.sh --yes` を実行します。生成履歴は保持されます。
+
 ## データソース
 
 企業情報と過去配信は `RecommendationContextProvider` に集約しています。`production_subset` は抽出CSVを直接参照し、`database` は `PostgresRecommendationContextProvider` が `company`、`release`、`release_statistic`、`release_keyword` などから取得します。データソースを読めない場合は架空データへフォールバックせず、APIエラーとして検出します。
