@@ -10,13 +10,6 @@ import {
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
-type ProposalExportContent = {
-  title: string;
-  contentOutline: string[];
-};
-
-type ProposalExportTarget = 'markdown' | 'word' | 'google_docs';
-
 type IconName =
   | 'arrow'
   | 'building'
@@ -251,18 +244,12 @@ function CompanyPanel({
 
 function SuggestionModal({
   suggestion,
-  exportBusy,
   onClose,
-  onExport,
   onSave,
-  onUse,
 }: {
   suggestion: ExistingSuggestion;
-  exportBusy: boolean;
   onClose: () => void;
-  onExport: (proposal: ProposalExportContent, target: ProposalExportTarget) => void;
   onSave: (suggestion: ExistingSuggestion) => void;
-  onUse: (suggestion: ExistingSuggestion) => void;
 }) {
   const [draft, setDraft] = useState(suggestion);
   const [editing, setEditing] = useState(false);
@@ -326,14 +313,6 @@ function SuggestionModal({
             ? <a href={draft.sourceUrl} target="_blank" rel="noreferrer">{draft.sourceTitle} <Icon name="arrow" size={14} /></a>
             : <strong>{draft.sourceTitle}</strong>}
         </div>
-        <ProposalExportActions
-          busy={exportBusy}
-          onExport={(target) => onExport(draft, target)}
-          proposal={draft}
-        />
-        <button className="primary-button primary-button--wide" onClick={() => onUse(draft)} type="button">
-          この企画を記事にする <Icon name="arrow" />
-        </button>
       </section>
     </div>
   );
@@ -341,16 +320,12 @@ function SuggestionModal({
 
 function PitchModal({
   opportunity,
-  exportBusy,
   onClose,
-  onExport,
   onSave,
   onCopy,
 }: {
   opportunity: NewOpportunity;
-  exportBusy: boolean;
   onClose: () => void;
-  onExport: (proposal: ProposalExportContent, target: ProposalExportTarget) => void;
   onSave: (opportunity: NewOpportunity) => void;
   onCopy: (opportunity: NewOpportunity) => void;
 }) {
@@ -419,12 +394,6 @@ function PitchModal({
             </div>
           </div>
         </div>
-
-        <ProposalExportActions
-          busy={exportBusy}
-          onExport={(target) => onExport(draft, target)}
-          proposal={draft}
-        />
 
         <button className="primary-button primary-button--wide" onClick={() => onCopy(draft)} type="button">
           提案文をコピーする <Icon name="check" />
@@ -503,53 +472,6 @@ function HistoryPanel({
       </aside>
     </div>
   );
-}
-
-function proposalToMarkdown(proposal: ProposalExportContent): string {
-  const outline = proposal.contentOutline.map(
-    (item, index) => `${index + 1}. ${item.replace(/\r?\n/g, '\n   ')}`,
-  );
-  return [`# ${proposal.title}`, '', '## おすすめ構成案・具体例', '', ...outline, ''].join('\n');
-}
-
-function ProposalExportActions({
-  busy,
-  onExport,
-  proposal,
-}: {
-  busy: boolean;
-  onExport: (target: ProposalExportTarget) => void;
-  proposal: ProposalExportContent;
-}) {
-  const disabled = busy || !proposal.title.trim() || !proposal.contentOutline.some((item) => item.trim());
-  return (
-    <section className="detail-export" aria-label="この企画の出力">
-      <div className="detail-export__copy">
-        <strong>この企画を出力</strong>
-        <span>タイトル＋おすすめ構成案・具体例のみ</span>
-      </div>
-      <div className="detail-export__actions">
-        <button className="secondary-button" disabled={disabled} onClick={() => onExport('markdown')} type="button">Markdown</button>
-        <button className="secondary-button" disabled={disabled} onClick={() => onExport('word')} type="button">Word</button>
-        <button className="secondary-button" disabled={disabled} onClick={() => onExport('google_docs')} type="button">Google Docs</button>
-      </div>
-    </section>
-  );
-}
-
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-function safeFileName(value: string): string {
-  return value.replace(/[\u0000-\u001f\\/:*?"<>|]/g, '-').slice(0, 80);
 }
 
 export function App() {
@@ -677,27 +599,6 @@ export function App() {
     }
   };
 
-  const useSuggestion = async (suggestion: ExistingSuggestion) => {
-    const copyText = [
-      suggestion.title,
-      '',
-      suggestion.summary,
-      '',
-      'おすすめ構成案・具体例',
-      ...suggestion.contentOutline.map((item, index) => `${index + 1}. ${item}`),
-      '',
-      `着想元：${suggestion.sourceTitle}`,
-    ].join('\n');
-    try {
-      const copied = await writeToClipboard(copyText);
-      if (!copied) throw new Error('Clipboard is unavailable');
-      setSelectedSuggestion(null);
-      setToast('企画メモをコピーしました');
-    } catch {
-      setToast('コピーできませんでした');
-    }
-  };
-
   const updateSuggestion = (suggestion: ExistingSuggestion) => {
     setDashboard((current) => current ? {
       ...current,
@@ -785,44 +686,6 @@ export function App() {
       setToast('履歴の提案を開きました');
     } catch {
       setToast('履歴を開けませんでした');
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const exportProposal = async (proposal: ProposalExportContent, target: ProposalExportTarget) => {
-    const exportableProposal = {
-      title: proposal.title.trim(),
-      contentOutline: proposal.contentOutline.map((item) => item.trim()).filter(Boolean),
-    };
-    const markdown = proposalToMarkdown(exportableProposal);
-    const fileBase = `${safeFileName(exportableProposal.title)}-おすすめ構成案`;
-    if (target === 'markdown') {
-      downloadBlob(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${fileBase}.md`);
-      setToast('表示中の企画をMarkdownで出力しました');
-      return;
-    }
-
-    const googleDocsWindow = target === 'google_docs' ? window.open('about:blank', '_blank') : null;
-    setActionBusy(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/recommendations/export/docx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposal: exportableProposal, target }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      downloadBlob(await response.blob(), `${fileBase}-${target === 'word' ? 'Word' : 'Google-Docs'}.docx`);
-      if (target === 'google_docs') {
-        await writeToClipboard(markdown);
-        if (googleDocsWindow) googleDocsWindow.location.href = 'https://docs.new';
-        setToast('表示中の企画だけをGoogle Docs用に出力しました');
-      } else {
-        setToast('表示中の企画をWordで出力しました');
-      }
-    } catch {
-      googleDocsWindow?.close();
-      setToast('ファイルを出力できませんでした');
     } finally {
       setActionBusy(false);
     }
@@ -956,20 +819,15 @@ export function App() {
       )}
       {selectedSuggestion && (
         <SuggestionModal
-          exportBusy={actionBusy}
           suggestion={selectedSuggestion}
           onClose={() => setSelectedSuggestion(null)}
-          onExport={exportProposal}
           onSave={updateSuggestion}
-          onUse={useSuggestion}
         />
       )}
       {pitchOpen && (
         <PitchModal
-          exportBusy={actionBusy}
           opportunity={opportunity}
           onClose={() => setPitchOpen(false)}
-          onExport={exportProposal}
           onSave={updateOpportunity}
           onCopy={copyPitch}
         />

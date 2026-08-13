@@ -53,13 +53,24 @@ test('GET /api/recommendations uses the configured CSV data source', async () =>
   assert.equal(response.status, 200);
   const data = (await response.json()) as {
     company: { name: string };
-    existingSuggestions: unknown[];
-    newOpportunity: { genre: string };
+    existingSuggestions: Array<{ title: string; summary: string }>;
+    newOpportunity: { genre: string; title: string; summary: string; pitch: string };
     meta: { dataSource: string; mode: string; generationId: string; saved: boolean };
   };
   assert.equal(data.company.name, '株式会社テスト空');
   assert.equal(data.existingSuggestions.length, 4);
   assert.equal(data.newOpportunity.genre, '人・カルチャー');
+  const recommendationCopy = [
+    ...data.existingSuggestions.flatMap((item) => [item.title, item.summary]),
+    data.newOpportunity.title,
+    data.newOpportunity.summary,
+    data.newOpportunity.pitch,
+  ].join('\n');
+  assert.doesNotMatch(
+    recommendationCopy,
+    /物語|舞台裏|ひもとく|新たな可能性|未来への一歩|価値を届ける|会社らしさ/u,
+  );
+  assert.match(data.newOpportunity.title, /担当者/u);
   assert.equal(data.meta.dataSource, 'production_subset');
   assert.equal(data.meta.mode, 'template');
   assert.match(data.meta.generationId, /^[0-9a-f-]{36}$/u);
@@ -99,33 +110,22 @@ test('POST /api/recommendations/generate applies generation conditions without a
   });
 });
 
-test('POST /api/recommendations/export/docx returns a Word document', async () => {
-  const proposal = {
-    title: '社内プロジェクトの舞台裏',
-    contentOutline: ['プロジェクトが始まった背景', '担当者が直面した課題', '今後の展望'],
-  };
+test('POST /api/recommendations/export/docx is no longer available', async () => {
   const response = await fetch(`${baseUrl}/api/recommendations/export/docx`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proposal, target: 'word' }),
+    body: JSON.stringify({}),
   });
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get('content-type') ?? '', /officedocument/u);
-  assert.match(decodeURIComponent(response.headers.get('content-disposition') ?? ''), /社内プロジェクトの舞台裏-おすすめ構成案-word\.docx/u);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  assert(bytes.length > 3_000);
-  assert.equal(String.fromCharCode(bytes[0] ?? 0, bytes[1] ?? 0), 'PK');
+  assert.equal(response.status, 404);
 });
 
-test('POST /api/recommendations/export/docx rejects dashboard-wide exports', async () => {
-  const dashboardResponse = await fetch(`${baseUrl}/api/recommendations?companyId=1`);
-  const dashboard = await dashboardResponse.json();
-  const response = await fetch(`${baseUrl}/api/recommendations/export/docx`, {
+test('POST /api/recommendations/drafts is no longer available', async () => {
+  const response = await fetch(`${baseUrl}/api/recommendations/drafts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dashboard, target: 'word' }),
+    body: JSON.stringify({}),
   });
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 404);
 });
 
 test('posting cadence prioritizes the left panel after 60 days and a new angle for recent posts', () => {

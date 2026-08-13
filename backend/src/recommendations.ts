@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { config } from './config.js';
+import { extractResponseText, openAiRequest } from './openAiClient.js';
 import {
   findCachedRecommendation,
   insertRecommendationGeneration,
@@ -128,32 +129,70 @@ function dashboardStats(context: RecommendationContext) {
   };
 }
 
+function compactReleaseTitle(value: string, maxLength = 38): string {
+  const characters = Array.from(value.replace(/\s+/gu, ' ').trim());
+  return characters.length <= maxLength
+    ? characters.join('')
+    : `${characters.slice(0, maxLength - 1).join('')}…`;
+}
+
+function releaseSubject(value: string): string {
+  const compact = compactReleaseTitle(value)
+    .replace(/[「」]/gu, '')
+    .replace(/(?:を)?(?:提供|販売|公開)?開始(?:しました)?$/u, '')
+    .replace(/(?:を)?発売(?:しました)?$/u, '')
+    .trim();
+  return compact || compactReleaseTitle(value);
+}
+
 function genericSuggestions(context: RecommendationContext): ExistingSuggestion[] {
   const releases = [...context.pastReleases].sort((left, right) => right.pageView - left.pageView);
   if (releases.length === 0) return [];
   const angles = [
-    { genre: '開発秘話', eyebrow: '過去記事 × 開発の背景', lead: '発表の裏側をひもとく' },
-    { genre: '担当者インタビュー', eyebrow: '過去記事 × 働く人', lead: '担当者の言葉で振り返る' },
-    { genre: 'データ解説', eyebrow: '過去記事 × 読者の反応', lead: '反響から次の可能性を読む' },
-    { genre: 'これからの展望', eyebrow: '過去記事 × 次の一歩', lead: '発表後の変化と未来を伝える' },
+    {
+      genre: '開発の経緯',
+      eyebrow: '過去記事 × 開発の背景',
+      title: (subject: string) => `${subject}はどうやって生まれたか。企画担当者に聞く`,
+      summary: '企画が始まった理由、途中で変えたこと、発表までに迷った点を担当者に聞きます。',
+    },
+    {
+      genre: '担当者インタビュー',
+      eyebrow: '過去記事 × 担当者',
+      title: (subject: string) => `${subject}の開発で、担当者がいちばん迷ったこと`,
+      summary: '担当者の役割、実際に手を動かした作業、判断が必要だった場面を取材します。',
+    },
+    {
+      genre: 'その後の反応',
+      eyebrow: '過去記事 × 公開後',
+      title: (subject: string) => `${subject}の発表後、現場で変わったこと`,
+      summary: '公開後に届いた反応と、その後に変更した点があるかを確認します。',
+    },
+    {
+      genre: '続報',
+      eyebrow: '過去記事 × これから',
+      title: (subject: string) => `${subject}の次の予定を担当者に聞く`,
+      summary: '現在の課題と、次に予定している改善や展開を担当者に聞きます。',
+    },
   ];
 
   return angles.map((angle, index) => {
     const release = releases[index % releases.length]!;
+    const sourceTitle = compactReleaseTitle(release.title);
+    const subject = releaseSubject(release.title);
     return {
       id: `release-${release.id}-${index + 1}`,
       genre: angle.genre,
       eyebrow: angle.eyebrow,
-      title: `${angle.lead}。「${release.title}」の先にある物語`,
-      summary: `${release.summary}という過去の発信を起点に、発表までの判断や公開後の変化を関係者への取材で具体化します。`,
+      title: angle.title(subject),
+      summary: angle.summary,
       whyNow:
         release.pageView > 0
-          ? `過去記事は${new Intl.NumberFormat('ja-JP').format(release.pageView)}PVを記録しており、関心を次の物語へつなげられます。`
-          : '過去の発表を現在の視点で振り返り、継続的な取り組みとして伝えられます。',
+          ? `元の記事は${new Intl.NumberFormat('ja-JP').format(release.pageView)}PV読まれています。続報として出しやすいテーマです。`
+          : '前回の発表から時間がたっているため、「その後」を伝えるだけでも読み手に新しい情報を出せます。',
       contentOutline: [
-        `背景｜「${release.title}」の企画は、顧客や現場から届いたどんな課題感から始まったのかを紹介します。`,
-        '判断｜初期案では解決できなかったことと、担当者が方針を変えた瞬間を具体的なエピソードで描きます。',
-        '現在地｜公開後に寄せられた反応や現場の変化を振り返り、次に実現したいことへつなげます。',
+        `発表時の状況｜「${sourceTitle}」を出すことになった背景と、当時の課題を担当者に確認します。`,
+        '担当者の判断｜途中で迷った点、方針を決めた理由、実際に工夫したことを聞きます。',
+        '発表後｜公開後の反応、現場で変わったこと、次に予定していることを整理します。',
       ],
       sourceTitle: release.title,
       sourceReleaseId: release.id,
@@ -169,21 +208,21 @@ function genericNewOpportunity(context: RecommendationContext): NewOpportunity {
   return {
     id: 'people-behind-company',
     genre: '人・カルチャー',
-    eyebrow: 'まだ発信していない魅力',
-    title: `${context.company.name}を動かす人と、日々の小さな工夫`,
-    summary: '商品やサービスの発表では見えにくい、働く人の判断やチームの日常を主役にする企画です。',
-    opportunityReason: `過去配信は${genres || '商品・サービス'}が中心です。企業情報にある「${context.company.description}」を実現する人や組織の姿は、新しい発信の入口になります。`,
-    pitch: `${context.company.name}の取り組みは、どんな人の、どんな判断から生まれているのでしょうか。日々の仕事で大切にしていることや、小さな改善の積み重ねを担当者への取材でひもときます。商品説明だけでは伝わらない、会社らしさが見える企画です。`,
+    eyebrow: 'これまで扱っていないテーマ',
+    title: `${context.company.name}の担当者に聞く、普段の仕事と判断`,
+    summary: '担当者の一日や、仕事で迷ったときの判断基準を取材します。商品紹介とは違う角度で会社を知ってもらう案です。',
+    opportunityReason: `過去配信は${genres || '商品・サービス'}が中心で、社員や仕事の進め方を扱った記事は見当たりませんでした。既存の記事と内容が重なりにくいテーマです。`,
+    pitch: `${context.company.name}の担当者に、普段どんな仕事をしているのか、判断に迷ったとき何を基準にしているのかを聞きます。実際の一日や最近あった出来事を入れると、採用候補者や取引先にも仕事内容が伝わりやすくなります。`,
     contentOutline: [
-      'きっかけ｜「入社当初は○○に戸惑った」という担当者の言葉から、現在の役割を選んだ理由をひもときます。',
-      '日常｜朝会や顧客対応など、チームが日々繰り返している判断と小さな工夫を具体的に紹介します。',
-      '変化｜「お客様の一言が、チームの動きを変えた」という出来事を、関係者への取材で確かめます。',
-      'これから｜今後届けたい価値と、そのために次に挑戦することを担当者の言葉で結びます。',
+      '担当業務｜所属、担当している仕事、一日の流れを具体的に聞きます。',
+      '判断基準｜仕事で迷った場面と、そのとき何を優先して決めたのかを聞きます。',
+      '最近の出来事｜顧客や同僚とのやり取りで印象に残っている出来事を確認します。',
+      '今後｜これから改善したいこと、次に取り組む予定を本人の言葉でまとめます。',
     ],
     interviewQuestions: [
-      '日々の仕事で最も大切にしている判断は何ですか？',
-      'チームらしさを感じた出来事を教えてください。',
-      'これから誰にどんな価値を届けたいですか？',
+      '普段の仕事を、朝から順に教えてください。',
+      '最近、判断に迷った仕事はありましたか。何を基準に決めましたか。',
+      '今後、仕事の進め方で変えたいことはありますか。',
     ],
   };
 }
@@ -327,53 +366,6 @@ const responseJsonSchema = {
   },
 } as const;
 
-async function openAiRequest(path: string, body: object): Promise<unknown> {
-  if (!config.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured');
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const response = await fetch(`https://api.openai.com/v1/${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(config.OPENAI_TIMEOUT_MS),
-    });
-
-    if (response.ok) return response.json();
-
-    const detail = (await response.text()).slice(0, 500);
-    const requestId = response.headers.get('x-request-id');
-    const canRetry = response.status === 429 || response.status >= 500;
-    if (attempt === 0 && canRetry) {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      continue;
-    }
-    throw new Error(
-      `OpenAI API ${response.status}${requestId ? ` (${requestId})` : ''}: ${detail}`,
-    );
-  }
-  throw new Error('OpenAI API request failed');
-}
-
-function extractResponseText(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') throw new Error('Invalid OpenAI response');
-  const response = payload as {
-    output_text?: unknown;
-    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-  };
-
-  if (typeof response.output_text === 'string') return response.output_text;
-
-  for (const item of response.output ?? []) {
-    for (const content of item.content ?? []) {
-      if (content.type === 'output_text' && typeof content.text === 'string') return content.text;
-    }
-  }
-  throw new Error('OpenAI response did not contain output text');
-}
-
 type RankedSimilarRelease = Pick<
   SimilarRelease,
   'companyName' | 'title' | 'genre' | 'summary' | 'pageView' | 'likeCount'
@@ -410,7 +402,7 @@ async function generateCopy(
           {
             type: 'input_text',
             text:
-              'あなたは中小企業専門の広報編集者です。自社の過去配信を活かした企画4件と、過去に発信していない魅力を掘り起こす企画1件を日本語で提案してください。recommendedFocusがexistingの場合は、久しぶりの配信を無理なく再開できるよう、左側の過去記事活用案を最優先で作ってください。recommendedFocusがnewの場合は、最近も配信している企業の発信が単調にならないよう、右側の未発信ジャンルを明確に差別化してください。generationConditionsの読者・目的・文体・追加情報を反映してください。各contentOutlineは見出しだけで終わらせず、「見出し｜本文に使える具体例の文章」の形式にし、一般論ではなく入力データの固有情報を反映してください。ただし、自社データに存在しない実績・制度・人数・顧客の声は事実として作らず、未確認事項は「取材で確かめる」「例えば」などの企画仮説として表現してください。既存企画はそれぞれ実在するsourceReleaseIdを1つ指定し、できるだけ異なる過去配信を起点にしてください。他社類似事例は切り口の参考に限り、社名・商品名・実績を自社の事実として転用しないでください。タイトルは具体的で、人や判断が見える表現を優先してください。',
+              'あなたは中小企業の広報担当と一緒に企画会議をする編集者です。完成原稿ではなく、担当者がそのまま会議に出せる簡潔な企画メモを書いてください。自社の過去配信を活かした企画4件と、過去に扱っていないテーマの企画1件を日本語で提案します。recommendedFocusがexistingなら過去記事の続報を優先し、newなら既存記事と内容が重ならない企画にします。generationConditionsの読者・目的・文体・追加情報を反映してください。タイトルは25〜55文字を目安に、誰の何を扱う記事かが一読で分かる普通の日本語にします。「物語」「舞台裏」「ひもとく」「新たな可能性」「未来への一歩」「挑戦」「想い」「価値を届ける」「会社らしさ」「〜なのでしょうか」などの抽象的な決まり文句や、過度な体言止め、煽り表現は使いません。元記事のタイトルをそのまま長く連結せず、必要な主題だけを短く使います。summaryは誰に何を聞くかを1〜2文、whyNowとopportunityReasonは入力中の具体的な根拠を1つ挙げて短く書きます。pitchは社内の同僚へ説明するような自然な2〜3文にします。各contentOutlineは「見出し｜記事に入れる内容」の形式とし、「紹介します」「具体化します」を繰り返さず、取材で確認する内容を具体的に書きます。自社データにない実績・制度・人数・顧客の声は作らず、未確認情報は断定しません。既存企画は実在するsourceReleaseIdを1つずつ指定し、できるだけ異なる過去配信を使います。他社事例は切り口の参考に限り、その社名・商品名・実績を自社の事実にしません。',
           },
         ],
       },
@@ -553,7 +545,7 @@ let storageWarningLogged = false;
 function cacheKeyFor(companyId: string, options: RecommendationGenerationOptions): string {
   const digest = createHash('sha256')
     .update(JSON.stringify({
-      version: 3,
+      version: 4,
       companyId,
       options,
       dataSource: config.RECOMMENDATION_DATA_SOURCE,

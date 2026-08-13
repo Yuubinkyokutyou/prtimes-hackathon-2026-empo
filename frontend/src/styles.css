@@ -1729,47 +1729,6 @@ main {
   font-size: 0.7rem;
 }
 
-.detail-export {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 16px 0 21px;
-  padding: 15px 16px;
-  border: 1px solid #dce3dc;
-  border-radius: 14px;
-  background: #fbfcfa;
-}
-
-.detail-export__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.detail-export__copy strong {
-  color: var(--ink);
-  font-size: 0.7rem;
-}
-
-.detail-export__copy span {
-  color: var(--soft-muted);
-  font-size: 0.61rem;
-  line-height: 1.55;
-}
-
-.detail-export__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-
-.detail-export__actions .secondary-button {
-  min-height: 34px;
-  padding-inline: 10px;
-}
-
 .primary-button--wide {
   width: 100%;
 }
@@ -1887,16 +1846,6 @@ main {
 
   .dashboard-toolbar > div {
     width: 100%;
-  }
-
-  .detail-export {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .detail-export__actions {
-    width: 100%;
-    justify-content: flex-start;
   }
 
   .editor-form--grid {
