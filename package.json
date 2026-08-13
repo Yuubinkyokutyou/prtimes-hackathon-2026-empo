@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n frontend,backend -c cyan,green \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "codex:setup": "node scripts/codex-setup.mjs",
     "dev:worktree": "node scripts/dev-worktree.mjs up",
     "dev:worktree:down": "node scripts/dev-worktree.mjs down",
     "dev:worktree:status": "node scripts/dev-worktree.mjs status",

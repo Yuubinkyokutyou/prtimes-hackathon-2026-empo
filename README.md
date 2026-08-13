@@ -6,6 +6,20 @@ React + Node.js/TypeScript + PostgreSQL で構成したアプリケーション�
 
 過去のプレスリリースをもとにした次回企画と、まだ発信していない企業の魅力を発見する企画を提案するダッシュボードです。OpenAI API キー未設定時も、選択したデータソースの企業情報と配信実績からテンプレートで提案を作成します。
 
+## Codex App の worktree セットアップ
+
+Codex App が作る managed worktree では、リポジトリ直下の `.worktreeinclude` により、Git 管理外の `.env` がメイン checkout から自動コピーされます。コピー元の `.env` がない場合、セットアップスクリプトは `.env.example` から作成します。
+
+Codex App で一度だけ **Settings > Local environments** を開き、このプロジェクト用の環境を次の内容で保存してください。以後、この環境を選んで worktree のチャットを作ると setup script が自動実行されます。
+
+- Setup script（Windows / macOS / Linux 共通）: `npm run codex:setup`
+- Run action: `npm run dev:worktree`
+- Status action: `npm run dev:worktree:status`
+- Logs action: `npm run dev:worktree:logs`
+- Stop action: `npm run dev:worktree:down`
+
+`Run` は worktree ごとに Compose プロジェクト、ボリューム、PostgreSQL / API / frontend の空きポートを割り当てます。同時起動でポートが先に使われた場合も、別ポートで最大3回再試行します。割り当て結果は Git 管理外の `.worktree-dev.json` に保存されます。
+
 ## 必要なもの
 
 - Docker Desktop（Docker Compose v2 を含む）

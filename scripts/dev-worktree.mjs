@@ -38,7 +38,7 @@ function composeEnvironment(state) {
   };
 }
 
-function runCompose(args, state, { capture = false } = {}) {
+function runCompose(args, state, { capture = false, exitOnError = true } = {}) {
   const result = spawnSync('docker', ['compose', '-p', projectName, ...args], {
     cwd: rootDirectory,
     env: state ? composeEnvironment(state) : process.env,
@@ -47,7 +47,7 @@ function runCompose(args, state, { capture = false } = {}) {
     windowsHide: true,
   });
   if (result.error) throw result.error;
-  if (result.status !== 0 && !capture) process.exit(result.status ?? 1);
+  if (result.status !== 0 && !capture && exitOnError) process.exit(result.status ?? 1);
   return result;
 }
 
@@ -125,11 +125,24 @@ async function main() {
       return;
     }
 
-    const state = writeState(await allocatePorts(storedState));
-    printSummary(state, 'このworktree専用の空きポートを割り当てました。');
-    runCompose(['up', '--build', '-d'], state);
-    printSummary(state, '開発環境を起動しました。');
-    return;
+    let previousState = storedState;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const state = writeState(await allocatePorts(previousState));
+      printSummary(state, 'このworktree専用の空きポートを割り当てました。');
+
+      const result = runCompose(['up', '--build', '-d'], state, { exitOnError: false });
+      if (result.status === 0) {
+        printSummary(state, '開発環境を起動しました。');
+        return;
+      }
+
+      runCompose(['down', '--remove-orphans'], state, { exitOnError: false });
+      previousState = null;
+      console.warn(`起動に失敗したため、別のポートで再試行します (${attempt}/3)。`);
+    }
+
+    console.error('空きポートで開発環境を起動できませんでした。');
+    process.exit(1);
   }
 
   const state = storedState ?? inspectRunningPorts();
