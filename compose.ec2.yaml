@@ -1,6 +1,19 @@
 name: team-empo
 
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    restart: "no"
+    command: ["node", "backend/dist/migrate.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_SSL: ${DATABASE_SSL:-true}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: ${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}
+
   backend:
     build:
       context: .
@@ -12,7 +25,7 @@ services:
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       DATABASE_SSL: ${DATABASE_SSL:-true}
-      DATABASE_SSL_REJECT_UNAUTHORIZED: ${DATABASE_SSL_REJECT_UNAUTHORIZED:-true}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: ${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_TEXT_MODEL: ${OPENAI_TEXT_MODEL:-gpt-5-mini}
@@ -22,6 +35,9 @@ services:
       PRODUCTION_SUBSET_DIRECTORY: ${PRODUCTION_SUBSET_DIRECTORY:-}
       RECOMMENDATION_CACHE_TTL_MS: ${RECOMMENDATION_CACHE_TTL_MS:-900000}
       RECOMMENDATION_STALE_AFTER_DAYS: ${RECOMMENDATION_STALE_AFTER_DAYS:-60}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     expose:
       - "3000"
     healthcheck:

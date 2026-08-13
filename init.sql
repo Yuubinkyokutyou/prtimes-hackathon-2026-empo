@@ -1,3 +1,6 @@
+-- Development-only bootstrap for reproducing the analysis tables locally.
+-- Do not apply this file to the production RDS database.
+
 CREATE TABLE IF NOT EXISTS business_category
 (
     business_category_id integer NOT NULL,

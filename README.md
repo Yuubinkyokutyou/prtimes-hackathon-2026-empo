@@ -20,7 +20,7 @@ docker compose up --build
 - API: http://localhost:3000/api/health
 - PostgreSQL: `localhost:5432`（使用中の場合は `.env` の `POSTGRES_PORT` を変更）
 
-初回起動時にルートの `init.sql` が自動実行されます。DB のデータを作り直す場合は、開発データが消えることを確認してから `docker compose down -v` を実行し、再度起動してください。
+初回起動時に、分析テーブルを開発環境へ再現するためのルート `init.sql` とデモ用の `seed.sql` がローカルDBだけに自動実行されます。その後、`migrations/*.sql` にあるアプリ用マイグレーションが適用されます。DB のデータを作り直す場合は、開発データが消えることを確認してから `docker compose down -v` を実行し、再度起動してください。
 
 標準設定ではローカルの `database/production_subset/csv` に配置した抽出データをバックエンドが直接読み取り、既存の開発DBを書き換えずに表示します。本番由来情報を含むためCSV本体はGit管理対象外です。DBへ完全に反映して検証したい場合だけ、次を実行します。
 
@@ -42,6 +42,7 @@ npm run dev
 ```bash
 npm run dev        # frontend / backend を同時起動
 npm run build      # 両方をビルド
+npm run migrate    # アプリ用DBマイグレーションを適用
 npm run typecheck  # TypeScript の型検査
 npm test           # backend のテスト
 npm run db:replace-production-subset -- --yes # 開発DBをproduction_subsetへ置換
@@ -49,30 +50,11 @@ npm run db:replace-production-subset -- --yes # 開発DBをproduction_subsetへ�
 
 ## EC2 + RDS へのデプロイ
 
-EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL は含まれません。
+EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL は含まれず、RDS for PostgreSQL に接続します。
 
-1. RDS for PostgreSQL を作成し、EC2 のセキュリティグループから RDS の 5432/TCP への接続を許可します。
-2. RDS に `init.sql` を一度だけ適用します。
+AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 のセットアップ、アプリ用マイグレーション、デプロイ、疎通確認までの手順は [EC2 + RDS デプロイ手順](docs/EC2_RDS_DEPLOY.md) を参照してください。
 
-   ```bash
-   psql "host=<RDS_ENDPOINT> port=5432 dbname=<DB_NAME> user=<DB_USER> sslmode=require" -f init.sql
-   ```
-
-3. EC2 上で `.env.ec2.example` を `.env.ec2` にコピーし、`DATABASE_URL` と `CORS_ORIGIN` を変更します。
-4. 起動します。
-
-   ```bash
-   docker compose --env-file .env.ec2 -f compose.ec2.yaml up -d --build
-   ```
-
-5. 確認します。
-
-   ```bash
-   curl http://localhost/api/health
-   curl http://localhost/api/health/db
-   ```
-
-本番では EC2 の 80 番ポートを直接公開するより、ALB または HTTPS を設定したリバースプロキシを前段に置く構成を推奨します。RDS は public access を無効にし、認証情報は AWS Systems Manager Parameter Store または Secrets Manager で管理してください。
+`init.sql` は分析環境をローカルに再現するためのもので、本番RDSへは適用しません。アプリ固有テーブルの追加方法は [アプリ用データベースマイグレーション](docs/DATABASE_MIGRATIONS.md) を参照してください。
 
 ## 環境変数
 
@@ -80,7 +62,7 @@ EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL �
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL 接続文字列 | `postgresql://user:pass@db:5432/app` |
 | `DATABASE_SSL` | RDS への TLS 接続 | `true` |
-| `DATABASE_SSL_REJECT_UNAUTHORIZED` | 証明書検証（通常は `true`） | `true` |
+| `DATABASE_SSL_REJECT_UNAUTHORIZED` | 証明書検証（ハッカソンは `false`、本番は `true`） | `false` |
 | `PORT` | API の待受ポート | `3000` |
 | `CORS_ORIGIN` | 許可するフロントの Origin（カンマ区切り可） | `https://example.com` |
 | `VITE_API_BASE_URL` | ブラウザから見た API のパス | `/api` |
@@ -120,7 +102,9 @@ npm run db:replace-production-subset -- --yes
 ```text
 frontend/          React + Vite + TypeScript
 backend/           Express + TypeScript + node-postgres
-init.sql           DB スキーマ
+init.sql           分析テーブルをローカル開発DBへ再現する初期化SQL
+seed.sql           ローカル開発用のデモデータ
+migrations/        アプリ固有テーブル用の番号付きマイグレーション
 compose.yaml       ローカル開発用（PostgreSQL を含む）
 compose.ec2.yaml   EC2/RDS 用（PostgreSQL を含まない）
 ```
