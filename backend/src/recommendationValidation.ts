@@ -20,8 +20,18 @@ const suggestionSchema = z.object({
   sourceTitle: z.string().max(1_000),
   sourceReleaseId: z.string().max(100),
   sourceUrl: z.string().max(2_000),
-  sourceEvidence: z.string().trim().min(1).max(8_000),
   similarity: z.number().min(0).max(100),
+});
+
+const newOpportunitySchema = z.object({
+  id: z.string(),
+  genre: z.string().max(100),
+  eyebrow: z.string().max(200),
+  title: z.string().min(1).max(500),
+  summary: z.string().max(4_000),
+  opportunityReason: z.string().max(8_000),
+  pitch: z.string().max(12_000),
+  contentOutline: z.array(z.string().max(4_000)).max(20),
 });
 
 export const recommendationDashboardSchema = z.object({
@@ -40,19 +50,19 @@ export const recommendationDashboardSchema = z.object({
     releasesAnalyzed: z.number().int().nonnegative(),
     genresFound: z.number().int().nonnegative(),
     lastPublished: z.string(),
+    dataUpdatedAt: z.string().optional(),
   }),
-  existingSuggestions: z.array(suggestionSchema).max(20),
-  newOpportunity: z.object({
+  sourceReleases: z.array(z.object({
     id: z.string(),
-    genre: z.string().max(100),
-    eyebrow: z.string().max(200),
-    title: z.string().min(1).max(500),
-    summary: z.string().max(4_000),
-    opportunityReason: z.string().max(8_000),
-    pitch: z.string().max(12_000),
-    contentOutline: z.array(z.string().max(4_000)).max(20),
-    interviewQuestions: z.array(z.string().max(2_000)).max(20),
-  }),
+    title: z.string().max(1_000),
+    publishedAt: z.string(),
+    sourceUrl: z.string().max(2_000),
+    pageView: z.number().nonnegative(),
+  })).max(100).optional(),
+  existingSuggestions: z.array(suggestionSchema).max(20),
+  newOpportunities: z.array(newOpportunitySchema).min(1).max(10).optional(),
+  // Stored histories created before the multi-candidate release used this singular field.
+  newOpportunity: newOpportunitySchema.optional(),
   meta: z.object({
     generatedAt: z.string(),
     mode: z.enum(['template', 'openai']),
@@ -63,8 +73,25 @@ export const recommendationDashboardSchema = z.object({
     generationId: z.string().uuid(),
     conditions: generationOptionsSchema,
     saved: z.boolean(),
+    generationNotice: z.string().max(1_000).optional(),
   }),
-});
+})
+  .superRefine((dashboard, context) => {
+    if (!dashboard.newOpportunities?.length && !dashboard.newOpportunity) {
+      context.addIssue({ code: 'custom', path: ['newOpportunities'], message: 'At least one opportunity is required' });
+    }
+  })
+  .transform(({ newOpportunity, ...dashboard }) => ({
+    ...dashboard,
+    stats: {
+      ...dashboard.stats,
+      dataUpdatedAt: dashboard.stats.dataUpdatedAt ?? dashboard.meta.generatedAt,
+    },
+    sourceReleases: dashboard.sourceReleases ?? [],
+    newOpportunities: dashboard.newOpportunities?.length
+      ? dashboard.newOpportunities
+      : [newOpportunity!],
+  }));
 
 export function parseRecommendationDashboard(input: unknown): RecommendationDashboard {
   return recommendationDashboardSchema.parse(input) as RecommendationDashboard;

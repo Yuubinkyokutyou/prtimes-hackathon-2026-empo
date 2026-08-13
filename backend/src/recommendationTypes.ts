@@ -44,7 +44,6 @@ export type ExistingSuggestion = {
   sourceTitle: string;
   sourceReleaseId: string;
   sourceUrl: string;
-  sourceEvidence: string;
   similarity: number;
 };
 
@@ -65,8 +64,12 @@ export type NewOpportunity = {
   opportunityReason: string;
   pitch: string;
   contentOutline: string[];
-  interviewQuestions: string[];
 };
+
+export type SourceReleaseSummary = Pick<
+  PastRelease,
+  'id' | 'title' | 'publishedAt' | 'sourceUrl' | 'pageView'
+>;
 
 export type RecommendationDashboard = {
   company: CompanyProfile;
@@ -74,9 +77,11 @@ export type RecommendationDashboard = {
     releasesAnalyzed: number;
     genresFound: number;
     lastPublished: string;
+    dataUpdatedAt: string;
   };
+  sourceReleases: SourceReleaseSummary[];
   existingSuggestions: ExistingSuggestion[];
-  newOpportunity: NewOpportunity;
+  newOpportunities: NewOpportunity[];
   meta: {
     generatedAt: string;
     mode: 'template' | 'openai';
@@ -87,6 +92,7 @@ export type RecommendationDashboard = {
     generationId: string;
     conditions: RecommendationGenerationOptions;
     saved: boolean;
+    generationNotice?: string;
   };
 };
 

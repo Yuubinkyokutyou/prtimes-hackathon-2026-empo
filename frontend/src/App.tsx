@@ -6,6 +6,7 @@ import {
   type RecommendationDashboard,
   type RecommendationGenerationOptions,
   type RecommendationHistoryItem,
+  type RegeneratedRecommendationItem,
 } from './data';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -94,12 +95,25 @@ async function writeToClipboard(text: string): Promise<boolean> {
   return copied;
 }
 
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    }).format(date)
+    : '不明';
+}
+
 function SuggestionCard({
   suggestion,
+  busy,
   onOpen,
+  onRegenerate,
 }: {
   suggestion: ExistingSuggestion;
+  busy: boolean;
   onOpen: () => void;
+  onRegenerate: () => void;
 }) {
   return (
     <article className="suggestion-card">
@@ -109,6 +123,9 @@ function SuggestionCard({
             <p className="micro-label">{suggestion.eyebrow}</p>
             <span className="genre-tag">{suggestion.genre}</span>
           </div>
+          <button className="card-regenerate" disabled={busy} onClick={onRegenerate} type="button">
+            <Icon name="sparkles" size={15} /> {busy ? '作成中…' : 'この案だけ作り直す'}
+          </button>
         </div>
 
         <h3>{suggestion.title}</h3>
@@ -245,24 +262,12 @@ function CompanyPanel({
 function SuggestionModal({
   suggestion,
   onClose,
-  onSave,
   onUse,
 }: {
   suggestion: ExistingSuggestion;
   onClose: () => void;
-  onSave: (suggestion: ExistingSuggestion) => void;
   onUse: (suggestion: ExistingSuggestion) => void;
 }) {
-  const [draft, setDraft] = useState(suggestion);
-  const [editing, setEditing] = useState(false);
-
-  const updateOutline = (index: number, value: string) => {
-    setDraft((current) => ({
-      ...current,
-      contentOutline: current.contentOutline.map((item, itemIndex) => itemIndex === index ? value : item),
-    }));
-  };
-
   return (
     <div className="overlay overlay--center" role="presentation" onMouseDown={onClose}>
       <section
@@ -275,47 +280,29 @@ function SuggestionModal({
           <Icon name="x" />
         </button>
         <div className="detail-modal__heading">
-          <span className="genre-tag">{draft.genre}</span>
-          <button className="secondary-button secondary-button--compact" onClick={() => setEditing(!editing)} type="button">
-            {editing ? '編集を閉じる' : '編集する'}
-          </button>
+          <span className="genre-tag">{suggestion.genre}</span>
         </div>
-        <p className="micro-label">{draft.eyebrow}</p>
-        {editing ? (
-          <div className="editor-form">
-            <label>タイトル<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-            <label>概要<textarea rows={3} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} /></label>
-            <label>なぜ今<textarea rows={3} value={draft.whyNow} onChange={(event) => setDraft({ ...draft, whyNow: event.target.value })} /></label>
-            <fieldset>
-              <legend>構成案</legend>
-              {draft.contentOutline.map((item, index) => (
-                <textarea key={index} rows={2} value={item} onChange={(event) => updateOutline(index, event.target.value)} />
-              ))}
-            </fieldset>
-            <button className="secondary-button" onClick={() => { onSave(draft); setEditing(false); }} type="button">編集内容を反映</button>
-          </div>
-        ) : (
-          <><h2>{draft.title}</h2><p className="detail-modal__summary">{draft.summary}</p></>
-        )}
+        <p className="micro-label">{suggestion.eyebrow}</p>
+        <h2>{suggestion.title}</h2>
+        <p className="detail-modal__summary">{suggestion.summary}</p>
 
         <div className="detail-grid">
           <div className="detail-block detail-block--accent">
             <span className="detail-block__icon"><Icon name="clock" size={18} /></span>
-            <div><h3>なぜ今、この企画？</h3><p>{draft.whyNow}</p></div>
+            <div><h3>なぜ今、この企画？</h3><p>{suggestion.whyNow}</p></div>
           </div>
           <div className="detail-block">
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
-            <div><h3>おすすめ構成案・具体例</h3><ol>{draft.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
+            <div><h3>おすすめ構成案・具体例</h3><ol>{suggestion.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
           </div>
         </div>
-        <div className="evidence-box"><strong>提案の根拠</strong><p>{draft.sourceEvidence}</p></div>
         <div className="detail-modal__source">
           <span>着想に使った過去配信</span>
-          {draft.sourceUrl
-            ? <a href={draft.sourceUrl} target="_blank" rel="noreferrer">{draft.sourceTitle} <Icon name="arrow" size={14} /></a>
-            : <strong>{draft.sourceTitle}</strong>}
+          {suggestion.sourceUrl
+            ? <a href={suggestion.sourceUrl} target="_blank" rel="noreferrer">{suggestion.sourceTitle} <Icon name="arrow" size={14} /></a>
+            : <strong>{suggestion.sourceTitle}</strong>}
         </div>
-        <button className="primary-button primary-button--wide" onClick={() => onUse(draft)} type="button">
+        <button className="primary-button primary-button--wide" onClick={() => onUse(suggestion)} type="button">
           この企画を記事にする <Icon name="arrow" />
         </button>
       </section>
@@ -326,28 +313,12 @@ function SuggestionModal({
 function PitchModal({
   opportunity,
   onClose,
-  onSave,
   onCopy,
 }: {
   opportunity: NewOpportunity;
   onClose: () => void;
-  onSave: (opportunity: NewOpportunity) => void;
   onCopy: (opportunity: NewOpportunity) => void;
 }) {
-  const [draft, setDraft] = useState(opportunity);
-  const [editing, setEditing] = useState(false);
-
-  const updateList = (
-    key: 'contentOutline' | 'interviewQuestions',
-    index: number,
-    value: string,
-  ) => {
-    setDraft((current) => ({
-      ...current,
-      [key]: current[key].map((item, itemIndex) => itemIndex === index ? value : item),
-    }));
-  };
-
   return (
     <div className="overlay overlay--center" role="presentation" onMouseDown={onClose}>
       <section
@@ -361,46 +332,33 @@ function PitchModal({
           <Icon name="x" />
         </button>
         <div className="detail-modal__heading">
-          <span className="genre-tag">{draft.genre}</span>
-          <button className="secondary-button secondary-button--compact" onClick={() => setEditing(!editing)} type="button">
-            {editing ? '編集を閉じる' : '編集する'}
-          </button>
+          <span className="genre-tag">{opportunity.genre}</span>
         </div>
         <p className="micro-label pitch-modal__label">PRESS RELEASE IDEA</p>
-        {editing ? (
-          <div className="editor-form">
-            <label>タイトル<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-            <label>概要<textarea rows={3} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} /></label>
-            <label>企画理由<textarea rows={3} value={draft.opportunityReason} onChange={(event) => setDraft({ ...draft, opportunityReason: event.target.value })} /></label>
-            <label>提案文<textarea rows={6} value={draft.pitch} onChange={(event) => setDraft({ ...draft, pitch: event.target.value })} /></label>
-            <fieldset><legend>構成案</legend>{draft.contentOutline.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateList('contentOutline', index, event.target.value)} />)}</fieldset>
-            <fieldset><legend>インタビュー質問</legend>{draft.interviewQuestions.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateList('interviewQuestions', index, event.target.value)} />)}</fieldset>
-            <button className="secondary-button" onClick={() => { onSave(draft); setEditing(false); }} type="button">編集内容を反映</button>
-          </div>
-        ) : <h2>{draft.title}</h2>}
+        <h2>{opportunity.title}</h2>
 
         <div className="pitch-modal__copy">
-          <p>{draft.pitch}</p>
+          <p>{opportunity.pitch}</p>
         </div>
 
         <div className="detail-grid">
+          <div className="detail-block detail-block--accent">
+            <span className="detail-block__icon"><Icon name="sparkles" size={18} /></span>
+            <div>
+              <h3>なぜ、これが魅力になる？</h3>
+              <p>{opportunity.opportunityReason}</p>
+            </div>
+          </div>
           <div className="detail-block">
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
             <div>
               <h3>おすすめ構成案・具体例</h3>
-              <ol>{draft.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol>
-            </div>
-          </div>
-          <div className="detail-block">
-            <span className="detail-block__icon"><Icon name="users" size={18} /></span>
-            <div>
-              <h3>インタビュー質問</h3>
-              <ul>{draft.interviewQuestions.map((item) => <li key={item}>{item}</li>)}</ul>
+              <ol>{opportunity.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol>
             </div>
           </div>
         </div>
 
-        <button className="primary-button primary-button--wide" onClick={() => onCopy(draft)} type="button">
+        <button className="primary-button primary-button--wide" onClick={() => onCopy(opportunity)} type="button">
           提案文をコピーする <Icon name="check" />
         </button>
       </section>
@@ -489,9 +447,11 @@ function layerFromLastPublished(dashboard: RecommendationDashboard): Recommendat
 function RecommendationApp() {
   const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
   const [visibleCount, setVisibleCount] = useState(1);
+  const [visibleOpportunityCount, setVisibleOpportunityCount] = useState(1);
   const [companyOpen, setCompanyOpen] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<ExistingSuggestion | null>(null);
-  const [pitchOpen, setPitchOpen] = useState(false);
+  const [selectedOpportunity, setSelectedOpportunity] = useState<NewOpportunity | null>(null);
+  const [selectedSourceReleaseId, setSelectedSourceReleaseId] = useState('');
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -503,6 +463,7 @@ function RecommendationApp() {
   const [history, setHistory] = useState<RecommendationHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [itemBusy, setItemBusy] = useState(false);
   const [activeLayer, setActiveLayer] = useState<RecommendationLayer>('new');
 
   useEffect(() => {
@@ -521,6 +482,8 @@ function RecommendationApp() {
         setActiveLayer(layerFromLastPublished(data));
         setLoadError('');
         setVisibleCount(1);
+        setVisibleOpportunityCount(1);
+        setSelectedSourceReleaseId(data.sourceReleases[0]?.id ?? '');
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -549,12 +512,12 @@ function RecommendationApp() {
   }, [companyOpen, companies.length]);
 
   useEffect(() => {
-    if (!companyOpen && !selectedSuggestion && !pitchOpen && !generationOpen && !historyOpen) return;
+    if (!companyOpen && !selectedSuggestion && !selectedOpportunity && !generationOpen && !historyOpen) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setCompanyOpen(false);
         setSelectedSuggestion(null);
-        setPitchOpen(false);
+        setSelectedOpportunity(null);
         setGenerationOpen(false);
         setHistoryOpen(false);
       }
@@ -565,7 +528,7 @@ function RecommendationApp() {
       document.body.classList.remove('modal-open');
       window.removeEventListener('keydown', close);
     };
-  }, [companyOpen, selectedSuggestion, pitchOpen, generationOpen, historyOpen]);
+  }, [companyOpen, selectedSuggestion, selectedOpportunity, generationOpen, historyOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -599,14 +562,11 @@ function RecommendationApp() {
       '',
       'おすすめ構成案・具体例',
       ...opportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
-      '',
-      'インタビュー質問',
-      ...opportunity.interviewQuestions.map((item) => `- ${item}`),
     ].join('\n');
     try {
       const copied = await writeToClipboard(copyText);
       if (!copied) throw new Error('Clipboard is unavailable');
-      setPitchOpen(false);
+      setSelectedOpportunity(null);
       setToast('提案文をコピーしました');
     } catch {
       setToast('コピーできませんでした');
@@ -632,25 +592,6 @@ function RecommendationApp() {
     } catch {
       setToast('コピーできませんでした');
     }
-  };
-
-  const updateSuggestion = (suggestion: ExistingSuggestion) => {
-    setDashboard((current) => current ? {
-      ...current,
-      existingSuggestions: current.existingSuggestions.map((item) => item.id === suggestion.id ? suggestion : item),
-      meta: { ...current.meta, saved: false },
-    } : current);
-    setSelectedSuggestion(suggestion);
-    setToast('編集内容を画面に反映しました');
-  };
-
-  const updateOpportunity = (opportunity: NewOpportunity) => {
-    setDashboard((current) => current ? {
-      ...current,
-      newOpportunity: opportunity,
-      meta: { ...current.meta, saved: false },
-    } : current);
-    setToast('編集内容を画面に反映しました');
   };
 
   const saveDashboard = async () => {
@@ -685,6 +626,8 @@ function RecommendationApp() {
       setDashboard(data);
       setActiveLayer(layerFromLastPublished(data));
       setVisibleCount(1);
+      setVisibleOpportunityCount(1);
+      setSelectedSourceReleaseId(data.sourceReleases[0]?.id ?? '');
       setGenerationOpen(false);
       setHistory([]);
       setToast('指定した条件で提案を再生成しました');
@@ -721,6 +664,8 @@ function RecommendationApp() {
       setActiveLayer(layerFromLastPublished(data));
       setHistoryOpen(false);
       setVisibleCount(1);
+      setVisibleOpportunityCount(1);
+      setSelectedSourceReleaseId(data.sourceReleases[0]?.id ?? '');
       setToast('履歴の提案を開きました');
     } catch {
       setToast('履歴を開けませんでした');
@@ -742,8 +687,10 @@ function RecommendationApp() {
       setDashboard(data);
       setActiveLayer(layerFromLastPublished(data));
       setVisibleCount(1);
+      setVisibleOpportunityCount(1);
+      setSelectedSourceReleaseId(data.sourceReleases[0]?.id ?? '');
       setSelectedSuggestion(null);
-      setPitchOpen(false);
+      setSelectedOpportunity(null);
       setCompanyOpen(false);
       setHistory([]);
       const url = new URL(window.location.href);
@@ -758,7 +705,86 @@ function RecommendationApp() {
     }
   };
 
-  const opportunity = dashboard.newOpportunity;
+  const regenerateSuggestion = async (
+    suggestion: ExistingSuggestion,
+    sourceReleaseId = suggestion.sourceReleaseId,
+  ) => {
+    setItemBusy(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/regenerate-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: dashboard.company.id,
+          layer: 'existing',
+          sourceReleaseId,
+          currentTitle: suggestion.title,
+          conditions: dashboard.meta.conditions,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = (await response.json()) as RegeneratedRecommendationItem;
+      const item = result.item as ExistingSuggestion;
+      setDashboard((current) => current ? {
+        ...current,
+        existingSuggestions: current.existingSuggestions.map((entry) => entry.id === suggestion.id ? item : entry),
+        meta: {
+          ...current.meta,
+          generatedAt: result.generatedAt,
+          mode: result.mode,
+          saved: false,
+          generationNotice: result.generationNotice,
+        },
+      } : current);
+      setSelectedSuggestion(null);
+      setVisibleCount(1);
+      setToast('選んだ元記事から、この案だけ作り直しました');
+    } catch {
+      setToast('この案を作り直せませんでした');
+    } finally {
+      setItemBusy(false);
+    }
+  };
+
+  const regenerateOpportunity = async (opportunity: NewOpportunity) => {
+    setItemBusy(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/regenerate-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: dashboard.company.id,
+          layer: 'new',
+          currentTitle: opportunity.title,
+          excludedTitles: dashboard.newOpportunities
+            .filter((item) => item.id !== opportunity.id)
+            .map((item) => item.title),
+          conditions: dashboard.meta.conditions,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = (await response.json()) as RegeneratedRecommendationItem;
+      const item = result.item as NewOpportunity;
+      setDashboard((current) => current ? {
+        ...current,
+        newOpportunities: current.newOpportunities.map((entry) => entry.id === opportunity.id ? item : entry),
+        meta: {
+          ...current.meta,
+          generatedAt: result.generatedAt,
+          mode: result.mode,
+          saved: false,
+          generationNotice: result.generationNotice,
+        },
+      } : current);
+      setSelectedOpportunity(null);
+      setToast('この案だけ新しい切り口で作り直しました');
+    } catch {
+      setToast('この案を作り直せませんでした');
+    } finally {
+      setItemBusy(false);
+    }
+  };
+
   const recommendedLayer = layerFromLastPublished(dashboard);
 
   return (
@@ -796,6 +822,9 @@ function RecommendationApp() {
             <button className="secondary-button" disabled={actionBusy} onClick={() => setGenerationOpen(true)} type="button"><Icon name="sparkles" size={16} /> 条件を指定して再生成</button>
             <button className="secondary-button" disabled={actionBusy} onClick={saveDashboard} type="button"><Icon name="check" size={16} /> {dashboard.meta.saved ? '保存済み' : '編集内容を保存'}</button>
             <button className="secondary-button" disabled={actionBusy} onClick={openHistory} type="button"><Icon name="clock" size={16} /> 生成履歴</button>
+            <span className="data-freshness" title={`提案生成：${formatDateTime(dashboard.meta.generatedAt)}`}>
+              <Icon name="calendar" size={14} /> 分析データ更新 {formatDateTime(dashboard.stats.dataUpdatedAt)}
+            </span>
           </div>
           <button className="company-trigger" onClick={() => setCompanyOpen(true)} type="button">
             <span className="company-avatar">{dashboard.company.initials}</span>
@@ -803,22 +832,58 @@ function RecommendationApp() {
             <Icon name="chevron" size={16} />
           </button>
         </section>
+        {dashboard.meta.generationNotice && (
+          <div className="generation-notice" role="status">
+            <span><Icon name="sparkles" size={16} />{dashboard.meta.generationNotice}</span>
+            <button onClick={() => setGenerationOpen(true)} type="button">再生成する</button>
+          </div>
+        )}
         <section className={`recommendation-grid recommendation-grid--single recommendation-grid--layer-${activeLayer}`}>
           {activeLayer === 'existing' && <div className="past-panel">
             <div className="section-heading">
               <div>
                 <p className="section-kicker"><span>01</span> BUILD ON YOUR STORY</p>
-                <h2>これまでの発信を、<br />次の記事へつなげる</h2>
+                <h2>過去の発信を広げる</h2>
               </div>
               {recommendedLayer === 'existing' && <span className="focus-badge">いまのおすすめ</span>}
             </div>
 
+            {dashboard.sourceReleases.length > 0 && (
+              <div className="source-selector">
+                <label htmlFor="source-release">元記事を選ぶ</label>
+                <select
+                  id="source-release"
+                  onChange={(event) => setSelectedSourceReleaseId(event.target.value)}
+                  value={selectedSourceReleaseId}
+                >
+                  {dashboard.sourceReleases.map((release) => (
+                    <option key={release.id} value={release.id}>
+                      {new Date(release.publishedAt).toLocaleDateString('ja-JP')}｜{release.title}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="secondary-button"
+                  disabled={itemBusy || !selectedSourceReleaseId || !dashboard.existingSuggestions[0]}
+                  onClick={() => {
+                    const suggestion = dashboard.existingSuggestions[0];
+                    if (suggestion) void regenerateSuggestion(suggestion, selectedSourceReleaseId);
+                  }}
+                  type="button"
+                >
+                  <Icon name="sparkles" size={16} /> {itemBusy ? '作成中…' : 'この元記事から企画を作る'}
+                </button>
+              </div>
+            )}
+
             <div className="suggestion-list">
               {dashboard.existingSuggestions.slice(0, visibleCount).map((suggestion) => (
                 <SuggestionCard
+                  busy={itemBusy}
                   key={suggestion.id}
                   suggestion={suggestion}
                   onOpen={() => setSelectedSuggestion(suggestion)}
+                  onRegenerate={() => void regenerateSuggestion(suggestion)}
                 />
               ))}
             </div>
@@ -837,26 +902,46 @@ function RecommendationApp() {
             <div className="discovery-panel__glow" aria-hidden="true" />
             <div className="discovery-panel__top">
               <p className="section-kicker section-kicker--light"><span>02</span> FIND A NEW STORY</p>
-              {recommendedLayer === 'new' && <span className="new-badge"><Icon name="sparkles" size={13} /> いまのおすすめ</span>}
+              {dashboard.newOpportunities[0] && (
+                <button
+                  className="card-regenerate card-regenerate--light"
+                  disabled={itemBusy}
+                  onClick={() => void regenerateOpportunity(dashboard.newOpportunities[0])}
+                  type="button"
+                >
+                  <Icon name="sparkles" size={15} /> {itemBusy ? '作成中…' : 'この案だけ作り直す'}
+                </button>
+              )}
             </div>
-            <h2>まだ語っていない、<br />あなたの会社の魅力</h2>
+            <h2>新しい切り口を見つける</h2>
             <p className="discovery-panel__intro">過去の発信にはなかった、新しい切り口を見つけました。</p>
 
-            <div className="opportunity-card">
-              <div className="opportunity-card__genre"><Icon name="lightbulb" size={17} /><span>未発信ジャンル</span><strong>{opportunity.genre}</strong></div>
-              <p className="micro-label micro-label--light">{opportunity.eyebrow}</p>
-              <h3>{opportunity.title}</h3>
-              <p>{opportunity.summary}</p>
+            <div className="opportunity-list">
+              {dashboard.newOpportunities.slice(0, visibleOpportunityCount).map((opportunity) => (
+                <article className="opportunity-card" key={opportunity.id}>
+                  <div className="opportunity-card__genre"><Icon name="lightbulb" size={17} /><span>未発信ジャンル</span><strong>{opportunity.genre}</strong></div>
+                  <p className="micro-label micro-label--light">{opportunity.eyebrow}</p>
+                  <h3>{opportunity.title}</h3>
+                  <p>{opportunity.summary}</p>
+                  <button className="opportunity-card__detail" onClick={() => setSelectedOpportunity(opportunity)} type="button">
+                    企画の詳細を見る <Icon name="arrow" size={16} />
+                  </button>
+                </article>
+              ))}
             </div>
 
-            <div className="reason-box">
-              <span className="reason-box__icon"><Icon name="sparkles" size={17} /></span>
-              <div><strong>なぜ、これが魅力になる？</strong><p>{opportunity.opportunityReason}</p></div>
-            </div>
-
-            <button className="light-button" onClick={() => setPitchOpen(true)} type="button">
-              この提案文を使う <Icon name="arrow" />
-            </button>
+            {dashboard.newOpportunities.length > 1 && (
+              <button
+                className="light-button"
+                onClick={() => setVisibleOpportunityCount(visibleOpportunityCount === 1 ? dashboard.newOpportunities.length : 1)}
+                type="button"
+              >
+                {visibleOpportunityCount === 1
+                  ? `ほかの提案も見る（${dashboard.newOpportunities.length - 1}件）`
+                  : '表示を閉じる'}
+                <Icon name="chevron" />
+              </button>
+            )}
           </aside>}
         </section>
 
@@ -882,17 +967,17 @@ function RecommendationApp() {
       )}
       {selectedSuggestion && (
         <SuggestionModal
+          key={selectedSuggestion.id}
           suggestion={selectedSuggestion}
           onClose={() => setSelectedSuggestion(null)}
-          onSave={updateSuggestion}
           onUse={useSuggestion}
         />
       )}
-      {pitchOpen && (
+      {selectedOpportunity && (
         <PitchModal
-          opportunity={opportunity}
-          onClose={() => setPitchOpen(false)}
-          onSave={updateOpportunity}
+          key={selectedOpportunity.id}
+          opportunity={selectedOpportunity}
+          onClose={() => setSelectedOpportunity(null)}
           onCopy={copyPitch}
         />
       )}

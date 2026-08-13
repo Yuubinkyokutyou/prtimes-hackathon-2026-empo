@@ -14,6 +14,7 @@ import {
   listRecommendationCompanies,
   refreshEditedDashboardCache,
   regenerateRecommendationDashboard,
+  regenerateRecommendationItem,
 } from './recommendations.js';
 import { CompanyNotFoundError } from './recommendationRepository.js';
 import { parseRecommendationDashboard } from './recommendationValidation.js';
@@ -117,6 +118,15 @@ app.post('/api/recommendations/generate', async (request, response, next) => {
         ? request.body.companyId.trim()
         : undefined;
     response.json(await regenerateRecommendationDashboard(companyId, request.body?.conditions));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/recommendations/regenerate-item', async (request, response, next) => {
+  try {
+    const companyId = z.string().min(1).parse(request.body?.companyId);
+    response.json(await regenerateRecommendationItem(companyId, request.body));
   } catch (error) {
     next(error);
   }

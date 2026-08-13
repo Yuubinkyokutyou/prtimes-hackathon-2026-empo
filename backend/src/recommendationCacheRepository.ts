@@ -1,5 +1,5 @@
 import { pool } from './db.js';
-import { withEvidenceFallback } from './recommendationEvidence.js';
+import { parseRecommendationDashboard } from './recommendationValidation.js';
 import type {
   RecommendationDashboard,
   RecommendationGenerationOptions,
@@ -58,7 +58,7 @@ export async function findCachedRecommendation(
     [cacheKey],
   );
   const dashboard = result.rows[0]?.dashboard;
-  return dashboard ? withEvidenceFallback(dashboard) : undefined;
+  return dashboard ? parseRecommendationDashboard(dashboard) : undefined;
 }
 
 export async function insertRecommendationGeneration(
@@ -98,17 +98,25 @@ export async function listRecommendationHistory(
      LIMIT $2`,
     [companyId, limit],
   );
-  return result.rows.map((row) => ({
-    id: row.id,
-    companyId: row.company_id,
-    companyName: row.dashboard.company.name,
-    title: row.dashboard.newOpportunity.title,
-    mode: row.dashboard.meta.mode,
-    conditions: row.conditions,
-    saved: row.saved,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
-  }));
+  return result.rows.map((row) => {
+    const dashboard = parseRecommendationDashboard(row.dashboard);
+    const focus = dashboard.meta.conditions.focus === 'auto'
+      ? dashboard.meta.recommendedFocus
+      : dashboard.meta.conditions.focus;
+    return {
+      id: row.id,
+      companyId: row.company_id,
+      companyName: dashboard.company.name,
+      title: focus === 'existing'
+        ? (dashboard.existingSuggestions[0]?.title ?? dashboard.newOpportunities[0]!.title)
+        : dashboard.newOpportunities[0]!.title,
+      mode: dashboard.meta.mode,
+      conditions: row.conditions,
+      saved: row.saved,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    };
+  });
 }
 
 export async function getRecommendationHistoryItem(
@@ -120,7 +128,7 @@ export async function getRecommendationHistoryItem(
     [id],
   );
   const dashboard = result.rows[0]?.dashboard;
-  return dashboard ? withEvidenceFallback(dashboard) : undefined;
+  return dashboard ? parseRecommendationDashboard(dashboard) : undefined;
 }
 
 export async function updateRecommendationHistoryItem(

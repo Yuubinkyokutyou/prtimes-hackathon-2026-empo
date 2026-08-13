@@ -1,5 +1,3 @@
-import type { RecommendationDashboard } from './recommendationTypes.js';
-
 type ReleaseEvidenceInput = {
   title?: string | null;
   subtitle?: string | null;
@@ -46,25 +44,4 @@ export function buildReleaseEvidence(input: ReleaseEvidenceInput): string {
     .map(plainText)
     .find(Boolean);
   return evidence ? truncate(evidence, 320) : evidenceFromSourceTitle(input.title);
-}
-
-export function withEvidenceFallback(
-  dashboard: RecommendationDashboard,
-): RecommendationDashboard {
-  let changed = false;
-  const existingSuggestions = dashboard.existingSuggestions.map((suggestion) => {
-    const sourceEvidence = suggestion.sourceEvidence.trim();
-    if (sourceEvidence) {
-      if (sourceEvidence === suggestion.sourceEvidence) return suggestion;
-      changed = true;
-      return { ...suggestion, sourceEvidence };
-    }
-    changed = true;
-    return {
-      ...suggestion,
-      sourceEvidence: evidenceFromSourceTitle(suggestion.sourceTitle),
-    };
-  });
-
-  return changed ? { ...dashboard, existingSuggestions } : dashboard;
 }
