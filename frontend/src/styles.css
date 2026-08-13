@@ -6,6 +6,18 @@
   background: #fff;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --ink: #1b251f;
+  --muted: #69746d;
+  --soft-muted: #8a948e;
+  --line: #e2e6e1;
+  --canvas: #f5f6f2;
+  --paper: #ffffff;
+  --deep-green: #153f32;
+  --green: #2d6a50;
+  --lime: #d9f06d;
+  --soft-lime: #f0f7ce;
+  --coral: #ff836e;
+  --violet: #8c80f8;
 }
 
 * { box-sizing: border-box; }

@@ -63,6 +63,116 @@ function Sidebar({ analysisOpen, setAnalysisOpen, page, setPage, mobileOpen }: {
     { label: 'ストーリー', icon: 'book' },
   ];
 
+  useEffect(() => {
+    if (!companyOpen || companies.length > 0) return;
+    const controller = new AbortController();
+    setCompaniesLoading(true);
+    fetch(`${apiBaseUrl}/recommendation-companies`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()) as { items: CompanySummary[] };
+      })
+      .then((data) => setCompanies(data.items))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setToast('企業一覧を取得できませんでした');
+      })
+      .finally(() => setCompaniesLoading(false));
+    return () => controller.abort();
+  }, [companyOpen, companies.length]);
+
+  useEffect(() => {
+    if (!companyOpen && !selectedSuggestion && !pitchOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCompanyOpen(false);
+        setSelectedSuggestion(null);
+        setPitchOpen(false);
+      }
+    };
+    document.body.classList.add('modal-open');
+    window.addEventListener('keydown', close);
+    return () => {
+      document.body.classList.remove('modal-open');
+      window.removeEventListener('keydown', close);
+    };
+  }, [companyOpen, selectedSuggestion, pitchOpen]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(''), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  const copyPitch = async () => {
+    const copyText = [
+      dashboard.newOpportunity.title,
+      '',
+      dashboard.newOpportunity.pitch,
+      '',
+      'おすすめ構成案・具体例',
+      ...dashboard.newOpportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
+    ].join('\n');
+    try {
+      const copied = await writeToClipboard(copyText);
+      if (!copied) throw new Error('Clipboard is unavailable');
+      setPitchOpen(false);
+      setToast('提案文をコピーしました');
+    } catch {
+      setToast('コピーできませんでした');
+    }
+  };
+
+  const useSuggestion = async (suggestion: ExistingSuggestion) => {
+    const copyText = [
+      suggestion.title,
+      '',
+      suggestion.summary,
+      '',
+      'おすすめ構成案・具体例',
+      ...suggestion.contentOutline.map((item, index) => `${index + 1}. ${item}`),
+      '',
+      `着想元：${suggestion.sourceTitle}`,
+    ].join('\n');
+    try {
+      const copied = await writeToClipboard(copyText);
+      if (!copied) throw new Error('Clipboard is unavailable');
+      setSelectedSuggestion(null);
+      setToast('企画メモをコピーしました');
+    } catch {
+      setToast('コピーできませんでした');
+    }
+  };
+
+  const selectCompany = async (companyId: string) => {
+    if (companyId === dashboard.company.id || changingCompanyId) return;
+    setChangingCompanyId(companyId);
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/recommendations?companyId=${encodeURIComponent(companyId)}`,
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as RecommendationDashboard;
+      setDashboard(data);
+      setVisibleCount(1);
+      setSelectedSuggestion(null);
+      setPitchOpen(false);
+      setCompanyOpen(false);
+      const url = new URL(window.location.href);
+      url.searchParams.set('companyId', companyId);
+      window.history.replaceState({}, '', url);
+      setToast(`${data.company.name}に切り替えました`);
+    } catch {
+      setToast('企業の切り替えに失敗しました');
+    } finally {
+      setChangingCompanyId(null);
+      setLoading(false);
+    }
+  };
+
+  const opportunity = dashboard.newOpportunity;
+
   return (
     <aside className={`sidebar ${mobileOpen ? 'sidebar--open' : ''}`}>
       <nav aria-label="メインメニュー">
