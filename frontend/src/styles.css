@@ -272,6 +272,17 @@ main {
   white-space: nowrap;
 }
 
+.layer-switcher-stack {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.layer-switcher-stack .data-freshness {
+  padding-left: 4px;
+}
+
 .generation-notice {
   display: flex;
   align-items: center;
@@ -370,6 +381,17 @@ main {
   cursor: wait;
   opacity: 0.55;
   transform: none;
+}
+
+.toolbar-condition-button {
+  flex: 0 0 auto;
+  min-width: 148px;
+  white-space: nowrap;
+}
+
+.toolbar-condition-button > span {
+  display: inline;
+  color: inherit;
 }
 
 .editor-form {
@@ -1975,6 +1997,10 @@ main {
   }
 
   .layer-switcher {
+    width: 100%;
+  }
+
+  .layer-switcher-stack {
     width: 100%;
   }
 
