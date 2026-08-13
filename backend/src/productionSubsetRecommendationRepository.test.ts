@@ -26,4 +26,9 @@ test('production_subset provider loads companies, releases, and candidates from 
   assert(context.pastReleases.length > 0);
   assert(context.candidateReleases.length > 0);
   assert(Number.isFinite(Date.parse(context.pastReleases[0]!.publishedAt)));
+
+  const profile = await provider.getCompanyProfile(companies[0]!.id);
+  assert.equal(profile.company.id, companies[0]!.id);
+  assert.equal(profile.stats.releaseCount, context.pastReleases.length);
+  assert(profile.stats.lastPublishedAt && Number.isFinite(Date.parse(profile.stats.lastPublishedAt)));
 });

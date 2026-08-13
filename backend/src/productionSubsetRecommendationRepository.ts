@@ -6,6 +6,7 @@ import { buildReleaseEvidence } from './recommendationEvidence.js';
 import { CompanyNotFoundError } from './recommendationRepository.js';
 import type {
   CompanyProfile,
+  CompanyProfileResult,
   CompanySummary,
   PastRelease,
   RecommendationContext,
@@ -229,6 +230,20 @@ implements RecommendationContextProvider {
     };
   }
 
+  async getCompanyProfile(companyId: string): Promise<CompanyProfileResult> {
+    const loaded = this.load();
+    const company = loaded.companies.get(companyId);
+    if (!company) throw new CompanyNotFoundError(companyId);
+    const releases = loaded.releasesByCompany.get(companyId) ?? [];
+    return {
+      company: structuredClone(company),
+      stats: {
+        releaseCount: releases.length,
+        lastPublishedAt: releases[0]?.publishedAt ?? null,
+      },
+    };
+  }
+
   async listCompanies(): Promise<CompanySummary[]> {
     const loaded = this.load();
     return Array.from(loaded.releasesByCompany.entries())
@@ -246,6 +261,7 @@ implements RecommendationContextProvider {
         industry: company.industry,
         releaseCount: releases.length,
         lastPublishedAt: releases[0]!.publishedAt,
+        hasCachedRecommendation: false,
       }));
   }
 }

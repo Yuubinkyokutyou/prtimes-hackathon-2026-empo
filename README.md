@@ -91,11 +91,12 @@ AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 �
 | `OPENAI_TIMEOUT_MS` | OpenAI API のタイムアウト（ms） | `300000` |
 | `RECOMMENDATION_DATA_SOURCE` | データ取得元（`production_subset` / `auto` / `database`） | `production_subset` |
 | `PRODUCTION_SUBSET_DIRECTORY` | production_subset CSVディレクトリ | `database/production_subset/csv` |
-| `RECOMMENDATION_CACHE_TTL_MS` | 生成結果のキャッシュ時間（ms） | `900000` |
 | `RECOMMENDATION_STALE_AFTER_DAYS` | 左側の過去記事活用案を優先する最終投稿日からの日数 | `60` |
 | `RECOMMENDATION_STORAGE_ENABLED` | 生成結果・履歴・編集内容をPostgreSQLへ保存 | `true` |
 
-OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、同じ企業・条件の結果はプロセス再起動後もTTL内なら再利用されます。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、同じ企業・条件の結果は期限なくキャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、プロセス再起動後も再利用されます。明示的な再生成操作はキャッシュを使わず、新しい提案を生成します。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+
+EC2/RDS本番環境の全提案キャッシュをクリアする場合は、リポジトリのルートで `./scripts/clear-recommendation-cache-production.sh --yes` を実行します。生成履歴は保持されます。
 
 ## データソース
 

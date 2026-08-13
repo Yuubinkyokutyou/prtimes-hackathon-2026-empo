@@ -220,5 +220,14 @@ CREATE TABLE IF NOT EXISTS recommendation_generation
 CREATE INDEX IF NOT EXISTS recommendation_generation_cache_idx
     ON recommendation_generation (cache_key, expires_at DESC);
 
+CREATE INDEX IF NOT EXISTS recommendation_generation_cache_latest_idx
+    ON recommendation_generation (cache_key, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS recommendation_generation_company_idx
     ON recommendation_generation (company_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS recommendation_cache_state
+(
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    invalidated_at timestamp with time zone NOT NULL DEFAULT '-infinity'::timestamptz
+);
