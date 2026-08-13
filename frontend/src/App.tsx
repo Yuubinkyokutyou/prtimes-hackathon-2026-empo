@@ -594,25 +594,7 @@ function RecommendationApp() {
     }
   };
 
-  const saveDashboard = async () => {
-    setActionBusy(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/recommendations/history/${dashboard.meta.generationId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dashboard }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setDashboard((await response.json()) as RecommendationDashboard);
-      setToast('企画を保存しました');
-    } catch {
-      setToast('企画を保存できませんでした');
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const regenerate = async (conditions: RecommendationGenerationOptions) => {
+  const regenerate = async (conditions?: RecommendationGenerationOptions) => {
     setActionBusy(true);
     setLoading(true);
     try {
@@ -630,7 +612,7 @@ function RecommendationApp() {
       setSelectedSourceReleaseId(data.sourceReleases[0]?.id ?? '');
       setGenerationOpen(false);
       setHistory([]);
-      setToast('指定した条件で提案を再生成しました');
+      setToast(conditions ? '指定した条件で提案を再生成しました' : '提案を再生成しました');
     } catch {
       setToast('提案を再生成できませんでした');
     } finally {
@@ -801,30 +783,41 @@ function RecommendationApp() {
       <main>
         <section className="dashboard-toolbar" aria-label="企画操作">
           <div className="dashboard-toolbar__actions">
-            <div className="layer-switcher" role="group" aria-label="表示する企画レイヤー">
-              <button
-                aria-pressed={activeLayer === 'existing'}
-                className={activeLayer === 'existing' ? 'is-active' : ''}
-                onClick={() => { setActiveLayer('existing'); setVisibleCount(1); }}
-                type="button"
-              >
-                <span>01</span> 過去記事活用
-              </button>
-              <button
-                aria-pressed={activeLayer === 'new'}
-                className={activeLayer === 'new' ? 'is-active' : ''}
-                onClick={() => setActiveLayer('new')}
-                type="button"
-              >
-                <span>02</span> 新しい切り口
-              </button>
+            <div className="layer-switcher-stack">
+              <div className="layer-switcher" role="group" aria-label="表示する企画レイヤー">
+                <button
+                  aria-pressed={activeLayer === 'existing'}
+                  className={activeLayer === 'existing' ? 'is-active' : ''}
+                  onClick={() => { setActiveLayer('existing'); setVisibleCount(1); }}
+                  type="button"
+                >
+                  <span>01</span> 過去記事活用
+                </button>
+                <button
+                  aria-pressed={activeLayer === 'new'}
+                  className={activeLayer === 'new' ? 'is-active' : ''}
+                  onClick={() => setActiveLayer('new')}
+                  type="button"
+                >
+                  <span>02</span> 新しい切り口
+                </button>
+              </div>
+              <span className="data-freshness" title={`提案生成：${formatDateTime(dashboard.meta.generatedAt)}`}>
+                <Icon name="calendar" size={14} /> 分析データ更新 {formatDateTime(dashboard.stats.dataUpdatedAt)}
+              </span>
             </div>
-            <button className="secondary-button" disabled={actionBusy} onClick={() => setGenerationOpen(true)} type="button"><Icon name="sparkles" size={16} /> 条件を指定して再生成</button>
-            <button className="secondary-button" disabled={actionBusy} onClick={saveDashboard} type="button"><Icon name="check" size={16} /> {dashboard.meta.saved ? '保存済み' : '編集内容を保存'}</button>
+            <button className="secondary-button" disabled={actionBusy} onClick={() => void regenerate()} type="button"><Icon name="sparkles" size={16} /> {actionBusy ? '再生成中…' : '提案を再生成'}</button>
+            <button
+              aria-label="条件を指定して再生成"
+              className="secondary-button toolbar-condition-button"
+              disabled={actionBusy}
+              onClick={() => setGenerationOpen(true)}
+              type="button"
+            >
+              <Icon name="sparkles" size={16} />
+              <span>条件を指定して再生成</span>
+            </button>
             <button className="secondary-button" disabled={actionBusy} onClick={openHistory} type="button"><Icon name="clock" size={16} /> 生成履歴</button>
-            <span className="data-freshness" title={`提案生成：${formatDateTime(dashboard.meta.generatedAt)}`}>
-              <Icon name="calendar" size={14} /> 分析データ更新 {formatDateTime(dashboard.stats.dataUpdatedAt)}
-            </span>
           </div>
           <button className="company-trigger" onClick={() => setCompanyOpen(true)} type="button">
             <span className="company-avatar">{dashboard.company.initials}</span>
