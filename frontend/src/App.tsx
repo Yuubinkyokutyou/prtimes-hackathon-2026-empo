@@ -932,14 +932,6 @@ function HeaderCompanySwitcher({
   return (
     <div className="pr-company-switcher">
       <button
-        className="pr-company-profile-link"
-        disabled={loading || !selected || profileLoading}
-        onClick={onViewProfile}
-        type="button"
-      >
-        <Icon name="building" size={13} /> {profileLoading ? '企業情報を読み込み中…' : '企業情報を見る'} <Icon name="arrow" size={13} />
-      </button>
-      <button
         aria-expanded={open}
         aria-haspopup="dialog"
         className="pr-account"
@@ -961,6 +953,21 @@ function HeaderCompanySwitcher({
             <div className="pr-company-menu__heading">
               <div><small>ANALYSIS COMPANY</small><h2>企業を切り替える</h2></div>
               <button onClick={() => setOpen(false)} type="button" aria-label="閉じる"><Icon name="x" size={18} /></button>
+            </div>
+            <div className="pr-company-menu__current">
+              <span className="pr-account__avatar">{selected?.initials ?? '企'}</span>
+              <span>
+                <small>現在選択中の企業</small>
+                <strong>{selected?.name}</strong>
+              </span>
+              <button
+                className="pr-company-profile-link"
+                disabled={loading || !selected || profileLoading}
+                onClick={() => { setOpen(false); onViewProfile(); }}
+                type="button"
+              >
+                <Icon name="building" size={14} /> {profileLoading ? '読み込み中…' : '企業情報を見る'}
+              </button>
             </div>
             <input
               autoComplete="off"
