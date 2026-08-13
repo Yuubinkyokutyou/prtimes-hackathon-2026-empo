@@ -155,7 +155,7 @@ cd PR_TIMES_HACK_2026
 
 非公開リポジトリの場合は、読み取り専用の deploy key や GitHub App など、チームの認証方式を使います。
 
-## 6. EC2 から RDS へ接続し、初期 SQL を適用する
+## 6. EC2 から既存の分析用RDSを確認する
 
 まず `psql` の Docker イメージを使って接続を確認します。パスワードはプロンプトで入力します。
 
@@ -163,29 +163,35 @@ cd PR_TIMES_HACK_2026
 docker run --rm -it \
   postgres:16-alpine \
   psql "host=<RDS_ENDPOINT> port=5432 dbname=team_empo user=app_user sslmode=require" \
-  -W -c "SELECT current_database(), current_user, version();"
+  -W -c "SELECT
+    current_database(),
+    current_user,
+    version(),
+    (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS ssl;"
 ```
 
-成功したら、テーブル定義を一度適用します。
-
-```bash
-docker run --rm -it \
-  -v "$PWD/init.sql:/init.sql:ro" \
-  postgres:16-alpine \
-  psql "host=<RDS_ENDPOINT> port=5432 dbname=team_empo user=app_user sslmode=require" \
-  -W -v ON_ERROR_STOP=1 -f /init.sql
-```
-
-テーブルを確認します。
+本番由来の分析テーブルが存在することを確認します。
 
 ```bash
 docker run --rm -it \
   postgres:16-alpine \
   psql "host=<RDS_ENDPOINT> port=5432 dbname=team_empo user=app_user sslmode=require" \
-  -W -c "\dt"
+  -W -c "\dt public.*"
 ```
 
-`init.sql` はテーブル定義のみです。初期データがなければ、画面のリリース一覧は空になります。また、本格運用では `init.sql` の再適用ではなく、マイグレーションツールの導入を検討してください。
+主要な分析テーブルにデータがあるかを、全件集計せず確認します。
+
+```bash
+docker run --rm -it \
+  postgres:16-alpine \
+  psql "host=<RDS_ENDPOINT> port=5432 dbname=team_empo user=app_user sslmode=require" \
+  -W -c "SELECT
+    EXISTS (SELECT 1 FROM public.company) AS has_companies,
+    EXISTS (SELECT 1 FROM public.release) AS has_releases,
+    EXISTS (SELECT 1 FROM public.release_statistic) AS has_statistics;"
+```
+
+ルートの `init.sql` は本番由来の分析テーブルをローカル開発DBへ再現する用途です。本番RDSには適用しません。上記テーブルがない場合は、利用するRDSまたはDB名が正しいかを確認してください。
 
 ## 7. 本番用環境変数を設定する
 
@@ -219,9 +225,22 @@ docker compose --env-file .env.ec2 -f compose.ec2.yaml config --quiet
 
 ## 8. 起動して RDS 接続を確認する
 
+`up` を実行すると、最初に `migrate` サービスが `migrations/*.sql` の未適用分だけをRDSへ適用します。マイグレーションが失敗した場合、backendは起動しません。
+
 ```bash
 docker compose --env-file .env.ec2 -f compose.ec2.yaml up -d --build
 docker compose --env-file .env.ec2 -f compose.ec2.yaml ps
+```
+
+`migrate` が `Exited (0)`、frontendとbackendが起動状態になっていることを確認します。マイグレーションのログと適用履歴は次のコマンドで確認できます。
+
+```bash
+docker compose --env-file .env.ec2 -f compose.ec2.yaml logs migrate
+
+docker run --rm -it \
+  postgres:16-alpine \
+  psql "host=<RDS_ENDPOINT> port=5432 dbname=team_empo user=app_user sslmode=require" \
+  -W -c "SELECT version, applied_at FROM app_migrations.schema_migration ORDER BY version;"
 ```
 
 EC2 内からアプリと DB のヘルスチェックを実行します。
@@ -229,6 +248,7 @@ EC2 内からアプリと DB のヘルスチェックを実行します。
 ```bash
 curl -fsS http://localhost/api/health
 curl -fsS http://localhost/api/health/db
+curl -fsS "http://localhost/api/releases?limit=1"
 ```
 
 期待する結果です。
@@ -236,9 +256,14 @@ curl -fsS http://localhost/api/health/db
 ```json
 {"status":"ok"}
 {"status":"ok","database":"connected"}
+{"items":[],"limit":1,"offset":0}
 ```
 
-ブラウザで `http://<EC2_PUBLIC_IP>/` を開きます。ここまで成功すれば、EC2 上のアプリから RDS を利用できています。
+`/api/health/db` は `SELECT 1` による接続確認です。`/api/releases` がHTTP 200を返せば、backendがRDS上の `public.release`、`public.company`、`public.release_statistic` を実際に参照できています。分析データが0件の場合、`items` が空配列でも正常です。
+
+ブラウザで `http://<EC2_PUBLIC_IP>/` を開きます。ここまで成功すれば、EC2 上のアプリからRDSを利用できています。
+
+アプリ固有テーブルを追加するときは、既存のマイグレーションを編集せず `migrations/002_...sql` のように新しいファイルを追加します。詳しくは [アプリ用データベースマイグレーション](DATABASE_MIGRATIONS.md) を参照してください。
 
 ## 更新時
 
@@ -250,7 +275,7 @@ docker compose --env-file .env.ec2 -f compose.ec2.yaml ps
 curl -fsS http://localhost/api/health/db
 ```
 
-DB スキーマ変更がある場合は、アプリを起動する前に必要なマイグレーションを適用します。
+`up` の中でアプリ用マイグレーションが先に適用されます。分析テーブルの更新や再作成はこのデプロイ処理では行いません。
 
 ## ログと停止
 
@@ -306,6 +331,17 @@ docker compose --env-file .env.ec2 -f compose.ec2.yaml logs --tail=200 backend
 ```
 
 環境変数エラー、DB 接続エラー、TLS 設定エラーの順に確認します。
+
+### migrate が失敗する
+
+```bash
+docker compose --env-file .env.ec2 -f compose.ec2.yaml logs --tail=200 migrate
+```
+
+- DBユーザーにスキーマ・テーブルを作成する権限があるか確認する。
+- 適用済みの `migrations/*.sql` を編集していないか確認する。
+- 分析テーブルへの外部キーを追加した場合、参照先の `public` テーブルが存在するか確認する。
+- SQLを修正するときは適用済みファイルを書き換えず、新しい番号のマイグレーションを追加する。
 
 ## 本番化するときの追加項目
 
