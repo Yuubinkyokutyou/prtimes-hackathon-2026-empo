@@ -85,12 +85,13 @@ test('GET /api/recommendation-companies returns selectable companies', async () 
   const response = await fetch(`${baseUrl}/api/recommendation-companies`);
   assert.equal(response.status, 200);
   const data = (await response.json()) as {
-    items: Array<{ id: string; name: string; releaseCount: number }>;
+    items: Array<{ id: string; name: string; releaseCount: number; lastPublishedAt: string }>;
   };
-  assert.deepEqual(data.items, [
+  assert.deepEqual(data.items.map(({ lastPublishedAt: _lastPublishedAt, ...company }) => company), [
     { id: '1', name: '株式会社テスト空', initials: 'テ', industry: '情報通信業', releaseCount: 1 },
     { id: '2', name: '株式会社テスト森', initials: 'テ', industry: '情報通信業', releaseCount: 1 },
   ]);
+  assert(data.items.every((company) => Number.isFinite(Date.parse(company.lastPublishedAt))));
 });
 
 test('saved history from the former singular opportunity shape remains readable', async () => {

@@ -143,11 +143,12 @@ function dashboardStats(context: RecommendationContext) {
 }
 
 function sourceReleases(context: RecommendationContext) {
-  return context.pastReleases.map(({ id, title, publishedAt, sourceUrl, pageView }) => ({
+  return context.pastReleases.map(({ id, title, publishedAt, sourceUrl, imageUrl, pageView }) => ({
     id,
     title,
     publishedAt,
     sourceUrl,
+    imageUrl,
     pageView,
   }));
 }
@@ -220,6 +221,7 @@ function genericSuggestions(context: RecommendationContext): ExistingSuggestion[
       sourceTitle: release.title,
       sourceReleaseId: release.id,
       sourceUrl: release.sourceUrl,
+      sourceImageUrl: release.imageUrl,
       similarity: 0,
     };
   });
@@ -935,6 +937,7 @@ async function generateDashboard(
           sourceReleaseId: source.id,
           sourceTitle: source.title,
           sourceUrl: source.sourceUrl,
+          sourceImageUrl: source.imageUrl,
           similarity: similarities[index] ?? 0,
         };
       })
@@ -1002,6 +1005,7 @@ export async function regenerateRecommendationItem(companyId: string, input: unk
         sourceReleaseId: source.id,
         sourceTitle: source.title,
         sourceUrl: source.sourceUrl,
+        sourceImageUrl: source.imageUrl,
         similarity,
       };
       return { layer: 'existing' as const, item, mode: 'openai' as const, generatedAt };

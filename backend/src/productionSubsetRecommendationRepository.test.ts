@@ -19,6 +19,7 @@ test('production_subset provider loads companies, releases, and candidates from 
 
   assert(companies.length > 0);
   assert(companies[0]!.releaseCount > 0);
+  assert(Number.isFinite(Date.parse(companies[0]!.lastPublishedAt)));
 
   const context = await provider.get(companies[0]!.id);
   assert.equal(context.company.id, companies[0]!.id);

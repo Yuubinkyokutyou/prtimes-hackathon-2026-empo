@@ -1877,6 +1877,71 @@ main {
   font-size: 0.7rem;
 }
 
+.detail-modal__source .source-preview {
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 178px minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #c9dce7;
+  border-radius: 12px;
+  margin-top: 5px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 6px 18px rgba(35, 83, 112, 0.07);
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.detail-modal__source .source-preview:hover {
+  border-color: #84bdd8;
+  transform: translateY(-1px);
+}
+
+.source-preview > img {
+  width: 178px;
+  height: 100%;
+  min-height: 112px;
+  object-fit: cover;
+  background: #eaf2f6;
+}
+
+.source-preview__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.source-preview__body small {
+  color: var(--soft-muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.source-preview__body strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.source-preview__body em {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--green);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .primary-button--wide {
   width: 100%;
 }
@@ -2288,10 +2353,76 @@ main {
 .pr-support small::before, .pr-support small::after { content: ''; height: 1px; flex: 1; background: #333; }
 .pr-support strong { font-size: 20px; }
 .pr-contact { height: 46px; }
-.pr-header-icon, .pr-user, .pr-mobile-menu { border: 0; background: transparent; font-size: 27px; }
-.pr-account { display: flex; flex-direction: column; align-items: center; font-size: 12px; white-space: nowrap; }
-.pr-account small { margin-top: 3px; }
-.pr-user { font-size: 34px; }
+.pr-header-icon, .pr-mobile-menu { border: 0; background: transparent; font-size: 27px; }
+.pr-company-switcher { position: relative; display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 3px; }
+.pr-company-profile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #397394;
+  font: 700 10px/1.35 "Noto Sans JP", sans-serif;
+}
+.pr-company-profile-link:hover { color: #0b67a3; text-decoration: underline; }
+.pr-company-profile-link:disabled { cursor: wait; opacity: .6; }
+.pr-account {
+  min-width: 220px;
+  height: 54px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid #d7e6ee;
+  border-radius: 12px;
+  background: #f8fcfe;
+  color: #17263a;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.pr-account:hover { border-color: #84bdd8; box-shadow: 0 6px 18px rgba(28, 101, 146, .09); }
+.pr-account:disabled { cursor: wait; opacity: .65; }
+.pr-account__avatar { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: #e2f3fb; color: #126d9f; font-weight: 800; }
+.pr-account__identity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pr-account__identity strong { max-width: 155px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pr-account__identity small { color: #687f90; font-size: 10px; }
+.pr-company-switcher__scrim { position: fixed; z-index: 71; inset: 0; border: 0; background: rgba(15, 35, 49, .18); cursor: default; }
+.pr-company-menu {
+  position: absolute;
+  z-index: 72;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(460px, calc(100vw - 24px));
+  max-height: calc(100vh - 126px);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid #cfe0ea;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(20, 58, 82, .24);
+  overflow: hidden;
+}
+.pr-company-menu__heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 15px; }
+.pr-company-menu__heading small { color: #1478b8; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.pr-company-menu__heading h2 { margin: 3px 0 0; font-size: 20px; }
+.pr-company-menu__heading > button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: #edf5f9; color: #4f6878; }
+.pr-company-menu > input[type="search"] { width: 100%; height: 44px; padding: 0 13px; border: 1px solid #cddde6; border-radius: 9px; color: #17263a; font: 500 13px "Noto Sans JP", sans-serif; }
+.pr-company-menu > input[type="search"]:focus { border-color: #168bc5; outline: 3px solid rgba(22, 139, 197, .12); }
+.pr-company-menu__filter { min-height: 48px; display: flex; align-items: center; gap: 9px; margin: 12px 0 5px; padding: 8px 11px; border-radius: 9px; background: #f2f8fb; color: #27485d; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pr-company-menu__filter input { width: 17px; height: 17px; accent-color: #1478b8; }
+.pr-company-menu__filter small { margin-left: auto; padding: 2px 7px; border-radius: 99px; background: #dceef7; color: #0b67a3; font-size: 10px; }
+.pr-company-menu__summary { margin: 9px 2px 6px; color: #7a8d99; font-size: 10px; }
+.pr-company-menu__list { min-height: 0; flex: 1 1 auto; overflow-y: auto; border-top: 1px solid #e7eff3; }
+.pr-company-menu__list > button { width: 100%; min-height: 76px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-bottom: 1px solid #edf2f5; background: #fff; color: #17263a; text-align: left; }
+.pr-company-menu__list > button:hover, .pr-company-menu__list > button.is-current { background: #f1f8fc; }
+.pr-company-menu__company { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pr-company-menu__company strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pr-company-menu__company small, .pr-company-menu__company em { color: #6c818e; font-size: 10px; font-style: normal; }
+.pr-company-menu__stale { padding: 4px 7px; border-radius: 99px; background: #fff0e4; color: #a85219; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.pr-company-menu__list > p { padding: 28px 8px; color: #718490; font-size: 12px; text-align: center; }
 .pr-mobile-menu { display: none; }
 
 .pr-sidebar {
@@ -2439,7 +2570,9 @@ main {
   .pr-support { min-width: 180px; }
   .pr-support strong { font-size: 17px; }
   .pr-contact { padding: 0 12px; font-size: 12px; }
-  .pr-account { display: none; }
+  .pr-support, .pr-contact { display: none; }
+  .pr-account { min-width: 190px; }
+  .pr-account__identity strong { max-width: 125px; }
 }
 
 @media (max-width: 1060px) {
@@ -2456,8 +2589,12 @@ main {
   .pr-header { height: 72px; padding: 0 13px; }
   .pr-mobile-menu { display: block; order: -1; }
   .pr-brand { margin: 0; font-size: 23px; }
-  .pr-header-actions { margin-left: auto; }
-  .pr-header-actions button:first-child, .pr-header-icon, .pr-user { display: none; }
+  .pr-header-actions { display: none; }
+  .pr-company-switcher { margin-left: auto; }
+  .pr-header-icon { display: none; }
+  .pr-account { min-width: 0; height: 46px; grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .pr-account__avatar { width: 34px; height: 34px; }
+  .pr-account__identity strong { max-width: 105px; }
   .pr-header-actions button { height: 42px; font-size: 10px; }
   .pr-sidebar { top: 72px; width: min(330px, 88vw); border-right-width: 1px; transform: translateX(-105%); transition: transform .2s ease; box-shadow: 12px 0 40px rgba(0,0,0,.14); }
   .pr-sidebar.is-open { transform: translateX(0); }
@@ -2476,4 +2613,12 @@ main {
   .pr-recommend-content { padding: 14px 12px 35px; }
   .pr-recommend-content .dashboard-toolbar { align-items: stretch; flex-direction: column; }
   .pr-recommend-content .dashboard-toolbar > .company-trigger { width: 100%; margin-left: 0; }
+}
+
+@media (max-width: 560px) {
+  .detail-modal__source .source-preview { grid-template-columns: 1fr; }
+  .source-preview > img { width: 100%; height: 138px; min-height: 0; }
+  .pr-account__identity { display: none; }
+  .pr-account { grid-template-columns: 34px auto; }
+  .pr-company-menu { position: fixed; top: 80px; right: 12px; bottom: 12px; left: 12px; width: auto; max-height: none; }
 }
