@@ -90,6 +90,8 @@ npm run db:replace-production-subset -- --yes
 
 画面が企業IDを指定しない場合、配信件数が多い企業をDBから自動選択します。最終配信から60日以上空いている企業は「01 過去記事活用」、60日未満の企業は「02 新しい切り口」を初期表示します。操作バーの01／02ボタンでいつでも表示を切り替えられます。
 
+01では元記事を選んで企画を1件だけ作り直せます。02は異なる切り口を3件生成し、初期表示の1件から必要に応じて残りを展開できます。分析対象データの最新日時を画面に表示し、AI生成に失敗して簡易提案へ切り替わった場合は再生成導線とともに通知します。
+
 特定企業を確認する場合は `http://localhost:5173/?companyId=<company_id>` のようにURLで企業IDを指定できます。画面の基本レイアウトは変わりません。
 
 ## 提案API
@@ -97,11 +99,12 @@ npm run db:replace-production-subset -- --yes
 - `GET /api/recommendation-companies`: 配信実績のある企業一覧
 - `GET /api/recommendations?companyId=<company_id>`: キャッシュ済み提案、または初回生成（省略時はDBから自動選択）
 - `POST /api/recommendations/generate`: キャッシュを更新する再生成
+- `POST /api/recommendations/regenerate-item`: 01または02の指定した企画1件だけを再生成
 - `GET /api/recommendations/history?companyId=<company_id>`: 生成履歴
 - `GET /api/recommendations/history/<generation_id>`: 保存した生成結果
 - `PUT /api/recommendations/history/<generation_id>`: 編集した企画の保存
 
-画面では生成条件（優先企画、文体、読者、目的、追加情報）の指定、企画編集・保存、履歴復元、根拠と元記事リンクの確認ができます。原稿生成やMarkdown・DOCXなどのファイル出力は行いません。
+画面では生成条件（優先企画、文体、読者、目的、追加情報）の指定、企画編集・保存、履歴復元、元記事リンクの確認ができます。原稿生成やMarkdown・DOCXなどのファイル出力は行いません。
 
 ## ディレクトリ
 

@@ -4,9 +4,7 @@ import {
   buildReleaseEvidence,
   evidenceFromSourceTitle,
   plainText,
-  withEvidenceFallback,
 } from './recommendationEvidence.js';
-import type { RecommendationDashboard } from './recommendationTypes.js';
 
 test('plainText removes HTML and decodes common entities', () => {
   assert.equal(
@@ -36,15 +34,4 @@ test('buildReleaseEvidence falls back from lead paragraph to subtitle, body, and
     subtitle: '',
     body: '',
   }), evidenceFromSourceTitle('新商品発表'));
-});
-
-test('withEvidenceFallback repairs blank evidence from saved history', () => {
-  const dashboard = {
-    existingSuggestions: [{ sourceEvidence: '   ', sourceTitle: '新商品発表' }],
-  } as RecommendationDashboard;
-  const repaired = withEvidenceFallback(dashboard);
-  assert.equal(
-    repaired.existingSuggestions[0]?.sourceEvidence,
-    evidenceFromSourceTitle('新商品発表'),
-  );
 });
