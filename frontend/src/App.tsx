@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  fallbackDashboard,
   type CompanySummary,
   type ExistingSuggestion,
   type NewOpportunity,
   type RecommendationDashboard,
+  type RecommendationGenerationOptions,
+  type RecommendationHistoryItem,
 } from './data';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
+
+type ProposalExportContent = {
+  title: string;
+  contentOutline: string[];
+};
+
+type ProposalExportTarget = 'markdown' | 'word' | 'google_docs';
 
 type IconName =
   | 'arrow'
@@ -232,9 +240,7 @@ function CompanyPanel({
             <span>
               {data.meta.dataSource === 'production_subset'
                 ? 'production_subsetの企業情報と過去配信を参照しています。'
-                : data.meta.dataSource === 'database'
-                  ? '企業情報と過去配信をデータベースから取得しています。'
-                  : 'データベースに接続できないため、seed準拠のデモデータを表示しています。'}
+                : '企業情報と過去配信をデータベースから取得しています。'}
             </span>
           </p>
         </div>
@@ -245,13 +251,29 @@ function CompanyPanel({
 
 function SuggestionModal({
   suggestion,
+  exportBusy,
   onClose,
+  onExport,
+  onSave,
   onUse,
 }: {
   suggestion: ExistingSuggestion;
+  exportBusy: boolean;
   onClose: () => void;
-  onUse: () => void;
+  onExport: (proposal: ProposalExportContent, target: ProposalExportTarget) => void;
+  onSave: (suggestion: ExistingSuggestion) => void;
+  onUse: (suggestion: ExistingSuggestion) => void;
 }) {
+  const [draft, setDraft] = useState(suggestion);
+  const [editing, setEditing] = useState(false);
+
+  const updateOutline = (index: number, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      contentOutline: current.contentOutline.map((item, itemIndex) => itemIndex === index ? value : item),
+    }));
+  };
+
   return (
     <div className="overlay overlay--center" role="presentation" onMouseDown={onClose}>
       <section
@@ -264,24 +286,52 @@ function SuggestionModal({
           <Icon name="x" />
         </button>
         <div className="detail-modal__heading">
-          <span className="genre-tag">{suggestion.genre}</span>
+          <span className="genre-tag">{draft.genre}</span>
+          <button className="secondary-button secondary-button--compact" onClick={() => setEditing(!editing)} type="button">
+            {editing ? '編集を閉じる' : '編集する'}
+          </button>
         </div>
-        <p className="micro-label">{suggestion.eyebrow}</p>
-        <h2>{suggestion.title}</h2>
-        <p className="detail-modal__summary">{suggestion.summary}</p>
+        <p className="micro-label">{draft.eyebrow}</p>
+        {editing ? (
+          <div className="editor-form">
+            <label>タイトル<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+            <label>概要<textarea rows={3} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} /></label>
+            <label>なぜ今<textarea rows={3} value={draft.whyNow} onChange={(event) => setDraft({ ...draft, whyNow: event.target.value })} /></label>
+            <fieldset>
+              <legend>構成案</legend>
+              {draft.contentOutline.map((item, index) => (
+                <textarea key={index} rows={2} value={item} onChange={(event) => updateOutline(index, event.target.value)} />
+              ))}
+            </fieldset>
+            <button className="secondary-button" onClick={() => { onSave(draft); setEditing(false); }} type="button">編集内容を反映</button>
+          </div>
+        ) : (
+          <><h2>{draft.title}</h2><p className="detail-modal__summary">{draft.summary}</p></>
+        )}
 
         <div className="detail-grid">
           <div className="detail-block detail-block--accent">
             <span className="detail-block__icon"><Icon name="clock" size={18} /></span>
-            <div><h3>なぜ今、この企画？</h3><p>{suggestion.whyNow}</p></div>
+            <div><h3>なぜ今、この企画？</h3><p>{draft.whyNow}</p></div>
           </div>
           <div className="detail-block">
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
-            <div><h3>おすすめ構成案・具体例</h3><ol>{suggestion.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
+            <div><h3>おすすめ構成案・具体例</h3><ol>{draft.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol></div>
           </div>
         </div>
-        <div className="detail-modal__source"><span>着想に使った過去配信</span><strong>{suggestion.sourceTitle}</strong></div>
-        <button className="primary-button primary-button--wide" onClick={onUse} type="button">
+        <div className="evidence-box"><strong>提案の根拠</strong><p>{draft.sourceEvidence}</p></div>
+        <div className="detail-modal__source">
+          <span>着想に使った過去配信</span>
+          {draft.sourceUrl
+            ? <a href={draft.sourceUrl} target="_blank" rel="noreferrer">{draft.sourceTitle} <Icon name="arrow" size={14} /></a>
+            : <strong>{draft.sourceTitle}</strong>}
+        </div>
+        <ProposalExportActions
+          busy={exportBusy}
+          onExport={(target) => onExport(draft, target)}
+          proposal={draft}
+        />
+        <button className="primary-button primary-button--wide" onClick={() => onUse(draft)} type="button">
           この企画を記事にする <Icon name="arrow" />
         </button>
       </section>
@@ -291,13 +341,33 @@ function SuggestionModal({
 
 function PitchModal({
   opportunity,
+  exportBusy,
   onClose,
+  onExport,
+  onSave,
   onCopy,
 }: {
   opportunity: NewOpportunity;
+  exportBusy: boolean;
   onClose: () => void;
-  onCopy: () => void;
+  onExport: (proposal: ProposalExportContent, target: ProposalExportTarget) => void;
+  onSave: (opportunity: NewOpportunity) => void;
+  onCopy: (opportunity: NewOpportunity) => void;
 }) {
+  const [draft, setDraft] = useState(opportunity);
+  const [editing, setEditing] = useState(false);
+
+  const updateList = (
+    key: 'contentOutline' | 'interviewQuestions',
+    index: number,
+    value: string,
+  ) => {
+    setDraft((current) => ({
+      ...current,
+      [key]: current[key].map((item, itemIndex) => itemIndex === index ? value : item),
+    }));
+  };
+
   return (
     <div className="overlay overlay--center" role="presentation" onMouseDown={onClose}>
       <section
@@ -310,12 +380,27 @@ function PitchModal({
         <button className="icon-button detail-modal__close" onClick={onClose} type="button" aria-label="閉じる">
           <Icon name="x" />
         </button>
-        <span className="genre-tag">{opportunity.genre}</span>
+        <div className="detail-modal__heading">
+          <span className="genre-tag">{draft.genre}</span>
+          <button className="secondary-button secondary-button--compact" onClick={() => setEditing(!editing)} type="button">
+            {editing ? '編集を閉じる' : '編集する'}
+          </button>
+        </div>
         <p className="micro-label pitch-modal__label">PRESS RELEASE IDEA</p>
-        <h2>{opportunity.title}</h2>
+        {editing ? (
+          <div className="editor-form">
+            <label>タイトル<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+            <label>概要<textarea rows={3} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} /></label>
+            <label>企画理由<textarea rows={3} value={draft.opportunityReason} onChange={(event) => setDraft({ ...draft, opportunityReason: event.target.value })} /></label>
+            <label>提案文<textarea rows={6} value={draft.pitch} onChange={(event) => setDraft({ ...draft, pitch: event.target.value })} /></label>
+            <fieldset><legend>構成案</legend>{draft.contentOutline.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateList('contentOutline', index, event.target.value)} />)}</fieldset>
+            <fieldset><legend>インタビュー質問</legend>{draft.interviewQuestions.map((item, index) => <textarea key={index} rows={2} value={item} onChange={(event) => updateList('interviewQuestions', index, event.target.value)} />)}</fieldset>
+            <button className="secondary-button" onClick={() => { onSave(draft); setEditing(false); }} type="button">編集内容を反映</button>
+          </div>
+        ) : <h2>{draft.title}</h2>}
 
         <div className="pitch-modal__copy">
-          <p>{opportunity.pitch}</p>
+          <p>{draft.pitch}</p>
         </div>
 
         <div className="detail-grid">
@@ -323,12 +408,25 @@ function PitchModal({
             <span className="detail-block__icon"><Icon name="file" size={18} /></span>
             <div>
               <h3>おすすめ構成案・具体例</h3>
-              <ol>{opportunity.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol>
+              <ol>{draft.contentOutline.map((item) => <li key={item}>{item}</li>)}</ol>
+            </div>
+          </div>
+          <div className="detail-block">
+            <span className="detail-block__icon"><Icon name="users" size={18} /></span>
+            <div>
+              <h3>インタビュー質問</h3>
+              <ul>{draft.interviewQuestions.map((item) => <li key={item}>{item}</li>)}</ul>
             </div>
           </div>
         </div>
 
-        <button className="primary-button primary-button--wide" onClick={onCopy} type="button">
+        <ProposalExportActions
+          busy={exportBusy}
+          onExport={(target) => onExport(draft, target)}
+          proposal={draft}
+        />
+
+        <button className="primary-button primary-button--wide" onClick={() => onCopy(draft)} type="button">
           提案文をコピーする <Icon name="check" />
         </button>
       </section>
@@ -336,17 +434,141 @@ function PitchModal({
   );
 }
 
+function GenerationModal({
+  initial,
+  busy,
+  onClose,
+  onGenerate,
+}: {
+  initial: RecommendationGenerationOptions;
+  busy: boolean;
+  onClose: () => void;
+  onGenerate: (options: RecommendationGenerationOptions) => void;
+}) {
+  const [options, setOptions] = useState(initial);
+  return (
+    <div className="overlay overlay--center" role="presentation" onMouseDown={onClose}>
+      <form className="detail-modal condition-modal" onMouseDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); onGenerate(options); }}>
+        <button className="icon-button detail-modal__close" onClick={onClose} type="button" aria-label="閉じる"><Icon name="x" /></button>
+        <p className="micro-label">GENERATION CONDITIONS</p>
+        <h2>条件を指定して再生成</h2>
+        <div className="editor-form editor-form--grid">
+          <label>優先する企画
+            <select value={options.focus} onChange={(event) => setOptions({ ...options, focus: event.target.value as RecommendationGenerationOptions['focus'] })}>
+              <option value="auto">配信状況から自動判定</option><option value="existing">過去記事の活用</option><option value="new">新しい切り口</option>
+            </select>
+          </label>
+          <label>文体
+            <select value={options.tone} onChange={(event) => setOptions({ ...options, tone: event.target.value as RecommendationGenerationOptions['tone'] })}>
+              <option value="standard">標準</option><option value="formal">フォーマル</option><option value="friendly">親しみやすい</option><option value="bold">印象的・大胆</option>
+            </select>
+          </label>
+          <label>想定読者<input maxLength={200} placeholder="例：地域の中小企業経営者" value={options.audience} onChange={(event) => setOptions({ ...options, audience: event.target.value })} /></label>
+          <label>発信目的<input maxLength={300} placeholder="例：採用候補者に企業文化を伝える" value={options.objective} onChange={(event) => setOptions({ ...options, objective: event.target.value })} /></label>
+          <label className="editor-form__wide">追加情報<textarea maxLength={2000} rows={5} placeholder="今回必ず含めたい事実や避けたい表現" value={options.additionalContext} onChange={(event) => setOptions({ ...options, additionalContext: event.target.value })} /></label>
+        </div>
+        <button className="primary-button primary-button--wide" disabled={busy} type="submit">{busy ? '再生成しています…' : 'この条件で再生成'} <Icon name="sparkles" /></button>
+      </form>
+    </div>
+  );
+}
+
+function HistoryPanel({
+  items,
+  loading,
+  onClose,
+  onLoad,
+}: {
+  items: RecommendationHistoryItem[];
+  loading: boolean;
+  onClose: () => void;
+  onLoad: (id: string) => void;
+}) {
+  return (
+    <div className="overlay" role="presentation" onMouseDown={onClose}>
+      <aside className="company-panel history-panel" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="生成履歴">
+        <button className="icon-button company-panel__close" onClick={onClose} type="button" aria-label="閉じる"><Icon name="x" /></button>
+        <p className="micro-label">GENERATION HISTORY</p><h2>生成履歴</h2>
+        <p className="history-panel__intro">生成結果はPostgreSQLに保存され、キャッシュ期限後も履歴から開けます。</p>
+        <div className="history-list">
+          {items.map((item) => (
+            <button key={item.id} onClick={() => onLoad(item.id)} type="button">
+              <span><strong>{item.title}</strong><small>{new Date(item.createdAt).toLocaleString('ja-JP')}・{item.mode === 'openai' ? 'OpenAI' : 'テンプレート'}</small></span>
+              <span className={`history-state${item.saved ? ' is-saved' : ''}`}>{item.saved ? '保存済み' : '自動保存'}</span>
+            </button>
+          ))}
+          {!loading && items.length === 0 && <p className="company-picker__empty">履歴はまだありません</p>}
+          {loading && <p className="company-picker__empty">履歴を読み込んでいます…</p>}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function proposalToMarkdown(proposal: ProposalExportContent): string {
+  const outline = proposal.contentOutline.map(
+    (item, index) => `${index + 1}. ${item.replace(/\r?\n/g, '\n   ')}`,
+  );
+  return [`# ${proposal.title}`, '', '## おすすめ構成案・具体例', '', ...outline, ''].join('\n');
+}
+
+function ProposalExportActions({
+  busy,
+  onExport,
+  proposal,
+}: {
+  busy: boolean;
+  onExport: (target: ProposalExportTarget) => void;
+  proposal: ProposalExportContent;
+}) {
+  const disabled = busy || !proposal.title.trim() || !proposal.contentOutline.some((item) => item.trim());
+  return (
+    <section className="detail-export" aria-label="この企画の出力">
+      <div className="detail-export__copy">
+        <strong>この企画を出力</strong>
+        <span>タイトル＋おすすめ構成案・具体例のみ</span>
+      </div>
+      <div className="detail-export__actions">
+        <button className="secondary-button" disabled={disabled} onClick={() => onExport('markdown')} type="button">Markdown</button>
+        <button className="secondary-button" disabled={disabled} onClick={() => onExport('word')} type="button">Word</button>
+        <button className="secondary-button" disabled={disabled} onClick={() => onExport('google_docs')} type="button">Google Docs</button>
+      </div>
+    </section>
+  );
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function safeFileName(value: string): string {
+  return value.replace(/[\u0000-\u001f\\/:*?"<>|]/g, '-').slice(0, 80);
+}
+
 export function App() {
-  const [dashboard, setDashboard] = useState<RecommendationDashboard>(fallbackDashboard);
+  const [dashboard, setDashboard] = useState<RecommendationDashboard | null>(null);
   const [visibleCount, setVisibleCount] = useState(1);
   const [companyOpen, setCompanyOpen] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<ExistingSuggestion | null>(null);
   const [pitchOpen, setPitchOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
   const [changingCompanyId, setChangingCompanyId] = useState<string | null>(null);
+  const [generationOpen, setGenerationOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<RecommendationHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -361,11 +583,12 @@ export function App() {
       })
       .then((data) => {
         setDashboard(data);
+        setLoadError('');
         setVisibleCount(1);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
-        setToast('提案APIに接続できないため、デモ内容を表示しています');
+        setLoadError('企業データを取得できませんでした。APIとデータソースの状態を確認してください。');
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
@@ -390,12 +613,14 @@ export function App() {
   }, [companyOpen, companies.length]);
 
   useEffect(() => {
-    if (!companyOpen && !selectedSuggestion && !pitchOpen) return;
+    if (!companyOpen && !selectedSuggestion && !pitchOpen && !generationOpen && !historyOpen) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setCompanyOpen(false);
         setSelectedSuggestion(null);
         setPitchOpen(false);
+        setGenerationOpen(false);
+        setHistoryOpen(false);
       }
     };
     document.body.classList.add('modal-open');
@@ -404,7 +629,7 @@ export function App() {
       document.body.classList.remove('modal-open');
       window.removeEventListener('keydown', close);
     };
-  }, [companyOpen, selectedSuggestion, pitchOpen]);
+  }, [companyOpen, selectedSuggestion, pitchOpen, generationOpen, historyOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -412,14 +637,35 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const copyPitch = async () => {
+  if (!dashboard) {
+    return (
+      <div className="app-shell">
+        <header className="site-header"><Brand /></header>
+        <main className="status-page" role="status">
+          <Icon name={loadError ? 'x' : 'sparkles'} size={24} />
+          <h1>{loadError ? 'データを表示できません' : '提案を準備しています'}</h1>
+          <p>{loadError || '企業情報と過去の配信を読み込んでいます。'}</p>
+          {loadError && (
+            <button className="primary-button" onClick={() => window.location.reload()} type="button">
+              再読み込み
+            </button>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  const copyPitch = async (opportunity: NewOpportunity) => {
     const copyText = [
-      dashboard.newOpportunity.title,
+      opportunity.title,
       '',
-      dashboard.newOpportunity.pitch,
+      opportunity.pitch,
       '',
       'おすすめ構成案・具体例',
-      ...dashboard.newOpportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
+      ...opportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
+      '',
+      'インタビュー質問',
+      ...opportunity.interviewQuestions.map((item) => `- ${item}`),
     ].join('\n');
     try {
       const copied = await writeToClipboard(copyText);
@@ -452,6 +698,136 @@ export function App() {
     }
   };
 
+  const updateSuggestion = (suggestion: ExistingSuggestion) => {
+    setDashboard((current) => current ? {
+      ...current,
+      existingSuggestions: current.existingSuggestions.map((item) => item.id === suggestion.id ? suggestion : item),
+      meta: { ...current.meta, saved: false },
+    } : current);
+    setSelectedSuggestion(suggestion);
+    setToast('編集内容を画面に反映しました');
+  };
+
+  const updateOpportunity = (opportunity: NewOpportunity) => {
+    setDashboard((current) => current ? {
+      ...current,
+      newOpportunity: opportunity,
+      meta: { ...current.meta, saved: false },
+    } : current);
+    setToast('編集内容を画面に反映しました');
+  };
+
+  const saveDashboard = async () => {
+    setActionBusy(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/history/${dashboard.meta.generationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboard }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setDashboard((await response.json()) as RecommendationDashboard);
+      setToast('企画を保存しました');
+    } catch {
+      setToast('企画を保存できませんでした');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const regenerate = async (conditions: RecommendationGenerationOptions) => {
+    setActionBusy(true);
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: dashboard.company.id, conditions }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as RecommendationDashboard;
+      setDashboard(data);
+      setVisibleCount(1);
+      setGenerationOpen(false);
+      setHistory([]);
+      setToast('指定した条件で提案を再生成しました');
+    } catch {
+      setToast('提案を再生成できませんでした');
+    } finally {
+      setActionBusy(false);
+      setLoading(false);
+    }
+  };
+
+  const openHistory = async () => {
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/history?companyId=${encodeURIComponent(dashboard.company.id)}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as { items: RecommendationHistoryItem[] };
+      setHistory(data.items);
+    } catch {
+      setToast('生成履歴を取得できませんでした');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const loadHistoryItem = async (id: string) => {
+    setActionBusy(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/history/${id}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setDashboard((await response.json()) as RecommendationDashboard);
+      setHistoryOpen(false);
+      setVisibleCount(1);
+      setToast('履歴の提案を開きました');
+    } catch {
+      setToast('履歴を開けませんでした');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const exportProposal = async (proposal: ProposalExportContent, target: ProposalExportTarget) => {
+    const exportableProposal = {
+      title: proposal.title.trim(),
+      contentOutline: proposal.contentOutline.map((item) => item.trim()).filter(Boolean),
+    };
+    const markdown = proposalToMarkdown(exportableProposal);
+    const fileBase = `${safeFileName(exportableProposal.title)}-おすすめ構成案`;
+    if (target === 'markdown') {
+      downloadBlob(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${fileBase}.md`);
+      setToast('表示中の企画をMarkdownで出力しました');
+      return;
+    }
+
+    const googleDocsWindow = target === 'google_docs' ? window.open('about:blank', '_blank') : null;
+    setActionBusy(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/recommendations/export/docx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal: exportableProposal, target }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      downloadBlob(await response.blob(), `${fileBase}-${target === 'word' ? 'Word' : 'Google-Docs'}.docx`);
+      if (target === 'google_docs') {
+        await writeToClipboard(markdown);
+        if (googleDocsWindow) googleDocsWindow.location.href = 'https://docs.new';
+        setToast('表示中の企画だけをGoogle Docs用に出力しました');
+      } else {
+        setToast('表示中の企画をWordで出力しました');
+      }
+    } catch {
+      googleDocsWindow?.close();
+      setToast('ファイルを出力できませんでした');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const selectCompany = async (companyId: string) => {
     if (companyId === dashboard.company.id || changingCompanyId) return;
     setChangingCompanyId(companyId);
@@ -467,6 +843,7 @@ export function App() {
       setSelectedSuggestion(null);
       setPitchOpen(false);
       setCompanyOpen(false);
+      setHistory([]);
       const url = new URL(window.location.href);
       url.searchParams.set('companyId', companyId);
       window.history.replaceState({}, '', url);
@@ -493,6 +870,13 @@ export function App() {
       </header>
 
       <main>
+        <section className="dashboard-toolbar" aria-label="企画操作">
+          <div>
+            <button className="secondary-button" disabled={actionBusy} onClick={() => setGenerationOpen(true)} type="button"><Icon name="sparkles" size={16} /> 条件を指定して再生成</button>
+            <button className="secondary-button" disabled={actionBusy} onClick={saveDashboard} type="button"><Icon name="check" size={16} /> {dashboard.meta.saved ? '保存済み' : '編集内容を保存'}</button>
+            <button className="secondary-button" disabled={actionBusy} onClick={openHistory} type="button"><Icon name="clock" size={16} /> 生成履歴</button>
+          </div>
+        </section>
         <section className={`recommendation-grid recommendation-grid--focus-${dashboard.meta.recommendedFocus}`}>
           <div className="past-panel">
             <div className="section-heading">
@@ -555,7 +939,7 @@ export function App() {
           <p><Icon name="sparkles" size={14} /> 提案は過去の配信・企業情報をもとにAIが作成しています。公開前に事実確認を行ってください。</p>
           <span className={`engine-badge engine-badge--${dashboard.meta.mode}`}>
             <i />
-            {loading ? '提案を準備中…' : dashboard.meta.mode === 'openai' ? 'OpenAI 生成済み' : 'デモモード'}
+            {loading ? '提案を準備中…' : dashboard.meta.mode === 'openai' ? 'OpenAI 生成済み' : 'テンプレート生成済み'}
           </span>
         </footer>
       </main>
@@ -572,16 +956,38 @@ export function App() {
       )}
       {selectedSuggestion && (
         <SuggestionModal
+          exportBusy={actionBusy}
           suggestion={selectedSuggestion}
           onClose={() => setSelectedSuggestion(null)}
-          onUse={() => useSuggestion(selectedSuggestion)}
+          onExport={exportProposal}
+          onSave={updateSuggestion}
+          onUse={useSuggestion}
         />
       )}
       {pitchOpen && (
         <PitchModal
+          exportBusy={actionBusy}
           opportunity={opportunity}
           onClose={() => setPitchOpen(false)}
+          onExport={exportProposal}
+          onSave={updateOpportunity}
           onCopy={copyPitch}
+        />
+      )}
+      {generationOpen && (
+        <GenerationModal
+          busy={actionBusy}
+          initial={dashboard.meta.conditions}
+          onClose={() => setGenerationOpen(false)}
+          onGenerate={regenerate}
+        />
+      )}
+      {historyOpen && (
+        <HistoryPanel
+          items={history}
+          loading={historyLoading}
+          onClose={() => setHistoryOpen(false)}
+          onLoad={loadHistoryItem}
         />
       )}
       {toast && <div className="toast" role="status"><Icon name="check" size={17} />{toast}</div>}

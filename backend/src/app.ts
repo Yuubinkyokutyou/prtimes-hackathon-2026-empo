@@ -1,14 +1,23 @@
 import cors from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 import helmet from 'helmet';
+import { ZodError, z } from 'zod';
 import { config } from './config.js';
 import { pool } from './db.js';
 import {
+  getRecommendationHistoryItem,
+  listRecommendationHistory,
+  updateRecommendationHistoryItem,
+} from './recommendationCacheRepository.js';
+import { buildProposalDocx } from './recommendationDocument.js';
+import {
   getRecommendationDashboard,
   listRecommendationCompanies,
+  refreshEditedDashboardCache,
   regenerateRecommendationDashboard,
 } from './recommendations.js';
 import { CompanyNotFoundError } from './recommendationRepository.js';
+import { parseRecommendationDashboard } from './recommendationValidation.js';
 
 type ReleaseRow = {
   company_id: number;
@@ -108,7 +117,70 @@ app.post('/api/recommendations/generate', async (request, response, next) => {
       typeof request.body?.companyId === 'string' && request.body.companyId.trim()
         ? request.body.companyId.trim()
         : undefined;
-    response.json(await regenerateRecommendationDashboard(companyId));
+    response.json(await regenerateRecommendationDashboard(companyId, request.body?.conditions));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/recommendations/history', async (request, response, next) => {
+  try {
+    if (!config.RECOMMENDATION_STORAGE_ENABLED) {
+      response.status(503).json({ error: 'Recommendation storage is disabled' });
+      return;
+    }
+    const companyId = z.string().min(1).parse(request.query.companyId);
+    const requestedLimit = Number(request.query.limit ?? 20);
+    const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
+    response.json({ items: await listRecommendationHistory(companyId, limit) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/recommendations/history/:id', async (request, response, next) => {
+  try {
+    const id = z.string().uuid().parse(request.params.id);
+    const dashboard = await getRecommendationHistoryItem(id);
+    if (!dashboard) {
+      response.status(404).json({ error: 'Recommendation history item not found' });
+      return;
+    }
+    response.json(dashboard);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/recommendations/history/:id', async (request, response, next) => {
+  try {
+    const id = z.string().uuid().parse(request.params.id);
+    const dashboard = parseRecommendationDashboard(request.body?.dashboard);
+    const saved = await updateRecommendationHistoryItem(id, dashboard);
+    if (!saved) {
+      response.status(404).json({ error: 'Recommendation history item not found' });
+      return;
+    }
+    refreshEditedDashboardCache(saved);
+    response.json(saved);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/recommendations/export/docx', async (request, response, next) => {
+  try {
+    const proposal = z.object({
+      title: z.string().trim().min(1).max(500),
+      contentOutline: z.array(z.string().trim().min(1).max(3_000)).min(1).max(20),
+    }).parse(request.body?.proposal);
+    const target = z.enum(['word', 'google_docs']).parse(request.body?.target ?? 'word');
+    const buffer = await buildProposalDocx(proposal, target);
+    const suffix = target === 'google_docs' ? 'google-docs' : 'word';
+    const fileName = `${proposal.title}-おすすめ構成案-${suffix}.docx`;
+    response.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    response.send(buffer);
   } catch (error) {
     next(error);
   }
@@ -119,6 +191,10 @@ app.use((_request, response) => {
 });
 
 const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
+  if (error instanceof ZodError) {
+    response.status(400).json({ error: 'Invalid request', details: error.flatten().fieldErrors });
+    return;
+  }
   if (error instanceof CompanyNotFoundError) {
     response.status(404).json({ error: 'Company not found' });
     return;

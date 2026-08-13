@@ -13,7 +13,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
-      - ./seed.sql:/docker-entrypoint-initdb.d/002-seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -55,6 +54,7 @@ services:
       PRODUCTION_SUBSET_DIRECTORY: /app/database/production_subset/csv
       RECOMMENDATION_CACHE_TTL_MS: ${RECOMMENDATION_CACHE_TTL_MS:-900000}
       RECOMMENDATION_STALE_AFTER_DAYS: ${RECOMMENDATION_STALE_AFTER_DAYS:-60}
+      RECOMMENDATION_STORAGE_ENABLED: ${RECOMMENDATION_STORAGE_ENABLED:-true}
     ports:
       - "${API_PORT:-3000}:3000"
     volumes:

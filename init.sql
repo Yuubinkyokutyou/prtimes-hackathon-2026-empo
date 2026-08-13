@@ -202,3 +202,23 @@ CREATE TABLE IF NOT EXISTS webclipping_list
         ON UPDATE NO ACTION
         ON DELETE NO ACTION
 );
+
+CREATE TABLE IF NOT EXISTS recommendation_generation
+(
+    id uuid NOT NULL,
+    cache_key text NOT NULL,
+    company_id text NOT NULL,
+    dashboard jsonb NOT NULL,
+    conditions jsonb NOT NULL,
+    saved boolean NOT NULL DEFAULT false,
+    created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT recommendation_generation_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS recommendation_generation_cache_idx
+    ON recommendation_generation (cache_key, expires_at DESC);
+
+CREATE INDEX IF NOT EXISTS recommendation_generation_company_idx
+    ON recommendation_generation (company_id, created_at DESC);

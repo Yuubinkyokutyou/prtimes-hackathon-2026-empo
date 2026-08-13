@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 process.env.DATABASE_URL ??= 'postgresql://unused:unused@localhost:5432/unused';
 process.env.NODE_ENV = 'test';
 process.env.OPENAI_API_KEY = '';
+process.env.RECOMMENDATION_DATA_SOURCE = 'production_subset';
+process.env.RECOMMENDATION_STORAGE_ENABLED = 'false';
+process.env.PRODUCTION_SUBSET_DIRECTORY = fileURLToPath(
+  new URL('./testFixtures/production-subset/', import.meta.url),
+);
 
 const { app } = await import('./app.js');
 const { closePool } = await import('./db.js');
@@ -42,19 +48,22 @@ test('unknown routes return JSON 404', async () => {
   assert.deepEqual(await response.json(), { error: 'Not found' });
 });
 
-test('GET /api/recommendations returns the demo dashboard', async () => {
+test('GET /api/recommendations uses the configured CSV data source', async () => {
   const response = await fetch(`${baseUrl}/api/recommendations`);
   assert.equal(response.status, 200);
   const data = (await response.json()) as {
     company: { name: string };
     existingSuggestions: unknown[];
     newOpportunity: { genre: string };
-    meta: { dataSource: string };
+    meta: { dataSource: string; mode: string; generationId: string; saved: boolean };
   };
-  assert.equal(data.company.name, '株式会社デモ青空');
+  assert.equal(data.company.name, '株式会社テスト空');
   assert.equal(data.existingSuggestions.length, 4);
-  assert.equal(data.newOpportunity.genre, '導入企業・伴走支援');
-  assert.equal(data.meta.dataSource, 'mock');
+  assert.equal(data.newOpportunity.genre, '人・カルチャー');
+  assert.equal(data.meta.dataSource, 'production_subset');
+  assert.equal(data.meta.mode, 'template');
+  assert.match(data.meta.generationId, /^[0-9a-f-]{36}$/u);
+  assert.equal(data.meta.saved, false);
 });
 
 test('GET /api/recommendation-companies returns selectable companies', async () => {
@@ -64,7 +73,8 @@ test('GET /api/recommendation-companies returns selectable companies', async () 
     items: Array<{ id: string; name: string; releaseCount: number }>;
   };
   assert.deepEqual(data.items, [
-    { id: '900001', name: '株式会社デモ青空', initials: '青', industry: '情報通信業', releaseCount: 5 },
+    { id: '1', name: '株式会社テスト空', initials: 'テ', industry: '情報通信業', releaseCount: 1 },
+    { id: '2', name: '株式会社テスト森', initials: 'テ', industry: '情報通信業', releaseCount: 1 },
   ]);
 });
 
@@ -74,15 +84,48 @@ test('GET /api/recommendations returns 404 for an unknown company', async () => 
   assert.deepEqual(await response.json(), { error: 'Company not found' });
 });
 
-test('POST /api/recommendations/generate falls back safely without an API key', async () => {
+test('POST /api/recommendations/generate applies generation conditions without an API key', async () => {
   const response = await fetch(`${baseUrl}/api/recommendations/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyId: '900001' }),
+    body: JSON.stringify({ companyId: '1', conditions: { focus: 'new', tone: 'formal', audience: '採用候補者' } }),
   });
   assert.equal(response.status, 200);
-  const data = (await response.json()) as { meta: { mode: string } };
-  assert.equal(data.meta.mode, 'demo');
+  const data = (await response.json()) as { meta: { mode: string; recommendedFocus: string; conditions: { tone: string; audience: string } } };
+  assert.equal(data.meta.mode, 'template');
+  assert.equal(data.meta.recommendedFocus, 'new');
+  assert.deepEqual(data.meta.conditions, {
+    focus: 'new', tone: 'formal', audience: '採用候補者', objective: '', additionalContext: '',
+  });
+});
+
+test('POST /api/recommendations/export/docx returns a Word document', async () => {
+  const proposal = {
+    title: '社内プロジェクトの舞台裏',
+    contentOutline: ['プロジェクトが始まった背景', '担当者が直面した課題', '今後の展望'],
+  };
+  const response = await fetch(`${baseUrl}/api/recommendations/export/docx`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proposal, target: 'word' }),
+  });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') ?? '', /officedocument/u);
+  assert.match(decodeURIComponent(response.headers.get('content-disposition') ?? ''), /社内プロジェクトの舞台裏-おすすめ構成案-word\.docx/u);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  assert(bytes.length > 3_000);
+  assert.equal(String.fromCharCode(bytes[0] ?? 0, bytes[1] ?? 0), 'PK');
+});
+
+test('POST /api/recommendations/export/docx rejects dashboard-wide exports', async () => {
+  const dashboardResponse = await fetch(`${baseUrl}/api/recommendations?companyId=1`);
+  const dashboard = await dashboardResponse.json();
+  const response = await fetch(`${baseUrl}/api/recommendations/export/docx`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dashboard, target: 'word' }),
+  });
+  assert.equal(response.status, 400);
 });
 
 test('posting cadence prioritizes the left panel after 60 days and a new angle for recent posts', () => {
