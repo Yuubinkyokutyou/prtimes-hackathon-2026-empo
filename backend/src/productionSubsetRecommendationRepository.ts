@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { config } from './config.js';
+import { buildReleaseEvidence } from './recommendationEvidence.js';
 import { CompanyNotFoundError } from './recommendationRepository.js';
 import type {
   CompanyProfile,
@@ -70,6 +71,10 @@ function readCsv(directory: string, fileName: string): CsvRecord[] {
   return rows.map((values) =>
     Object.fromEntries(header.map((column, index) => [column, values[index] === 'NULL' ? '' : (values[index] ?? '')])),
   );
+}
+
+function readOptionalCsv(directory: string, fileName: string): CsvRecord[] {
+  return existsSync(path.join(directory, fileName)) ? readCsv(directory, fileName) : [];
 }
 
 function initialsFor(name: string): string {
@@ -154,6 +159,12 @@ implements RecommendationContextProvider {
       values.push(keyword);
       releaseKeywords.set(key, values);
     }
+    const releaseUrls = new Map<string, string>();
+    for (const row of readOptionalCsv(this.directory, '15_webclipping_list.csv')) {
+      const key = `${value(row, 'company_id')}:${value(row, 'release_id')}`;
+      const releaseUrl = value(row, 'release_url');
+      if (releaseUrl && !releaseUrls.has(key)) releaseUrls.set(key, releaseUrl);
+    }
 
     const now = Date.now();
     const releases: LoadedSubset['releases'] = [];
@@ -171,12 +182,18 @@ implements RecommendationContextProvider {
         id: releaseId,
         title: value(row, 'title'),
         genre: releaseTypes.get(value(row, 'release_type_id')) || 'その他',
-        summary: value(row, 'lead_paragraph') || value(row, 'subtitle'),
+        summary: buildReleaseEvidence({
+          title: value(row, 'title'),
+          subtitle: value(row, 'subtitle'),
+          leadParagraph: value(row, 'lead_paragraph'),
+          body: value(row, 'body'),
+        }),
         body: value(row, 'body').slice(0, 4_000),
         publishedAt: new Date(timestamp).toISOString(),
         pageView: statistic?.pageView ?? 0,
         likeCount: statistic?.likeCount ?? 0,
         keywords: releaseKeywords.get(key) ?? [],
+        sourceUrl: releaseUrls.get(key) ?? '',
       };
       releases.push({ ...release, companyId, companyName: company.name });
       const ownReleases = releasesByCompany.get(companyId) ?? [];

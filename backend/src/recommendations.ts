@@ -1,5 +1,10 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { config } from './config.js';
+import {
+  findCachedRecommendation,
+  insertRecommendationGeneration,
+} from './recommendationCacheRepository.js';
 import {
   CompanyNotFoundError,
   PostgresRecommendationContextProvider,
@@ -11,8 +16,8 @@ import type {
   NewOpportunity,
   PastRelease,
   RecommendationContext,
-  RecommendationContextProvider,
   RecommendationDashboard,
+  RecommendationGenerationOptions,
   SimilarRelease,
 } from './recommendationTypes.js';
 
@@ -22,191 +27,35 @@ export type {
   ExistingSuggestion,
   NewOpportunity,
   RecommendationDashboard,
+  RecommendationGenerationOptions,
+  RecommendationHistoryItem,
 } from './recommendationTypes.js';
-
-// Replace this provider with a PostgreSQL implementation when real company data is ready.
-// The generation and UI contracts can stay unchanged.
-const mockContextProvider: RecommendationContextProvider = {
-  async get(companyId: string) {
-    if (companyId !== '900001') throw new CompanyNotFoundError(companyId);
-    return {
-      company: {
-        id: '900001',
-        name: '株式会社デモ青空',
-        initials: '青',
-        industry: '情報通信業',
-        location: '東京都渋谷区',
-        founded: '2018年',
-        capital: '5,000万円',
-        website: 'https://aozora.example',
-        description: 'AIとデータを活用した架空の業務支援サービスを開発するデモ企業です。',
-      },
-      pastReleases: [
-        {
-          id: '1',
-          genre: '商品サービス',
-          title: '【架空サービス】広報AIアシスタント「SoraPress」β版を提供開始',
-          summary: 'プレスリリース作成から効果測定までを一つの画面で支援。',
-          body: '企画メモを基にプレスリリースの構成案を作成し、公開後の反響を確認できるデモサービスです。',
-          publishedAt: '2026-08-12T09:00:00.000Z',
-          pageView: 128450,
-          likeCount: 3120,
-          keywords: ['AI', 'DX', '新商品'],
-        },
-        {
-          id: '2',
-          genre: 'イベント',
-          title: '全国の広報担当者向け「デモPR勉強会2026」を東京・オンラインで開催',
-          summary: '実践ワークショップと交流会を同時開催。',
-          body: '会場参加とオンライン参加を選べるハイブリッド形式で、架空事例を使ったワークショップを実施します。',
-          publishedAt: '2026-07-20T14:30:00.000Z',
-          pageView: 8450,
-          likeCount: 210,
-          keywords: ['イベント', '教育', 'AI'],
-        },
-        {
-          id: '3',
-          genre: '調査レポート',
-          title: '生成AIの広報活用に関する実態調査2026、担当者の72％が業務効率化を実感',
-          summary: '架空の広報担当者400名を対象にしたデモ調査。',
-          body: '文章の下書き、情報収集、効果測定の順で利用が多いという架空の結果です。',
-          publishedAt: '2026-06-30T10:00:00.000Z',
-          pageView: 35680,
-          likeCount: 780,
-          keywords: ['調査', 'AI', 'DX'],
-        },
-        {
-          id: '4',
-          genre: '経営情報',
-          title: '株式会社デモ青空、事業拡大に向けた架空の資金調達を実施',
-          summary: '開発・採用・地域展開を強化。',
-          body: '調達したという設定の資金は、プロダクト開発、採用、カスタマーサポートの強化に充当します。',
-          publishedAt: '2026-05-15T15:00:00.000Z',
-          pageView: 15020,
-          likeCount: 402,
-          keywords: ['資金調達', 'スタートアップ', '採用'],
-        },
-        {
-          genre: '商品サービス',
-          title: '広報AIアシスタント「SoraPress」に他社事例から企画案を提案する機能を追加',
-          summary: '過去の発信テーマと広報効果測定を基に次の一手を提示。',
-          body: '投稿済みの内容から目的と対象読者を抽出し、類似した他社事例や別の切り口を表示します。',
-          id: '5',
-          publishedAt: '2026-08-12T16:30:00.000Z',
-          pageView: 0,
-          likeCount: 0,
-          keywords: ['広報DX', 'プレスリリース作成', '広報効果測定'],
-        },
-      ],
-      candidateReleases: [],
-    };
-  },
-  async listCompanies() {
-    return [
-      {
-        id: '900001',
-        name: '株式会社デモ青空',
-        initials: '青',
-        industry: '情報通信業',
-        releaseCount: 5,
-      },
-    ];
-  },
-};
 
 const postgresContextProvider = new PostgresRecommendationContextProvider();
 const productionSubsetContextProvider = new ProductionSubsetRecommendationContextProvider();
 
-const demoSuggestions: ExistingSuggestion[] = [
-  {
-    id: 'sorapress-origin',
-    genre: '開発秘話',
-    eyebrow: '過去記事 × 開発ストーリー',
-    title: '企画メモが記事になるまで。広報AI「SoraPress」β版を支えた試行錯誤',
-    summary:
-      '機能紹介だけでは見えなかった、企画メモから構成案を生み出すまでの改善過程を開発チームの言葉でたどります。',
-    whyNow: 'β版提供開始の記事は12万PVを超えており、読者の関心を開発の背景へ広げやすいタイミングです。',
-    contentOutline: [
-      '広報担当者の「何から書けばいい？」が出発点',
-      '企画メモを構成案へ変えるまでの検証',
-      '効果測定まで一つの画面に込めた理由',
-    ],
-    sourceTitle: '【架空サービス】広報AIアシスタント「SoraPress」β版を提供開始',
-    sourceReleaseId: '1',
-    similarity: 95,
-  },
-  {
-    id: 'workshop-voices',
-    genre: 'イベントレポート',
-    eyebrow: '過去記事 × 参加者の声',
-    title: '「広報ネタがない」が変わった日。デモPR勉強会2026の学びと対話',
-    summary:
-      '開催告知を参加者視点のレポートへ展開。実践ワークショップで生まれた気づきや担当者同士の対話を次回開催につなげます。',
-    whyNow: '告知だけで終わらせず、参加価値を具体化することで次回イベントやコミュニティ形成に活用できます。',
-    contentOutline: [
-      '参加者が抱えていた発信の悩み',
-      '架空事例ワークで見つけた自社の切り口',
-      '勉強会の先に育てたい広報担当者のつながり',
-    ],
-    sourceTitle: '全国の広報担当者向け「デモPR勉強会2026」を東京・オンラインで開催',
-    sourceReleaseId: '2',
-    similarity: 90,
-  },
-  {
-    id: 'survey-insight',
-    genre: '調査インサイト',
-    eyebrow: '過去記事 × データ解説',
-    title: '72％の「効率化実感」、その先へ。400人調査から読む広報AIの現在地',
-    summary:
-      '調査結果の発表から一歩進み、文章作成・情報収集・効果測定で生成AIがどう使い分けられているかを解説します。',
-    whyNow: '3.5万PVの調査結果を実務目線で読み直し、継続的に参照される解説コンテンツへ発展できます。',
-    contentOutline: ['72％が実感した効率化の内訳', '活用が進む業務・進まない業務', '広報担当者が次に備えること'],
-    sourceTitle: '生成AIの広報活用に関する実態調査2026、担当者の72％が業務効率化を実感',
-    sourceReleaseId: '3',
-    similarity: 92,
-  },
-  {
-    id: 'growth-vision',
-    genre: '経営・ビジョン',
-    eyebrow: '過去記事 × これからの会社',
-    title: '資金調達のその先へ。デモ青空が描く「すべての企業に広報の力を」',
-    summary:
-      '調達額の発表ではなく、開発・採用・地域展開を通じて解決したい広報課題と今後の意思を代表者の言葉で伝えます。',
-    whyNow: '資金調達記事に書かれた三つの投資領域を、顧客と社会にとっての価値へ言い換えられます。',
-    contentOutline: ['創業時に感じた中小企業の広報課題', '開発・採用・地域展開に投資する理由', '5年後に実現したい広報のあり方'],
-    sourceTitle: '株式会社デモ青空、事業拡大に向けた架空の資金調達を実施',
-    sourceReleaseId: '4',
-    similarity: 84,
-  },
-];
+const generationOptionsSchema = z.object({
+  focus: z.enum(['auto', 'existing', 'new']).optional(),
+  tone: z.enum(['standard', 'formal', 'friendly', 'bold']).optional(),
+  audience: z.string().trim().max(200).optional(),
+  objective: z.string().trim().max(300).optional(),
+  additionalContext: z.string().trim().max(2_000).optional(),
+});
 
-const demoNewOpportunity: NewOpportunity = {
-  id: 'customer-success',
-  genre: '導入企業・伴走支援',
-  eyebrow: 'まだ発信していない魅力',
-  title: 'AIを入れて終わりにしない。広報担当者の「最初の1本」に伴走する人たち',
-  summary:
-    'SoraPressの機能ではなく、導入企業が自社の魅力を見つけ、最初の発信を形にするまでのサポートを主役にした企画です。',
-  opportunityReason:
-    'seed.sqlの過去5本は、サービス・イベント・調査・資金調達が中心。カスタマーサポートへの投資は示されていますが、顧客に伴走する人やプロセスはまだ発信されていません。',
-  pitch:
-    'プレスリリースを書いた経験がない担当者は、AIがあっても自社の何を伝えるべきか迷います。デモ青空の伴走チームは、答えを代わりに書くのではなく、担当者との対話から発信の種を見つけます。最初の企画メモが一本の記事になるまでを、導入企業と担当者の両方の視点から紹介します。',
-  contentOutline: [
-    'きっかけ｜AIがあっても書き始められない担当者の声',
-    '伴走｜対話から企業らしい発信テーマを見つけるまで',
-    '変化｜最初の一本が社内の情報共有を変える',
-    'これから｜地域や業種を越えて広報の選択肢を広げる',
-  ],
-  interviewQuestions: [
-    '導入直後、担当者が最も迷っていたことは何ですか？',
-    'AIではなく人が伴走する価値はどこにありますか？',
-    '最初の一本を出した後、社内にどんな変化がありましたか？',
-  ],
-};
+export function normalizeGenerationOptions(input?: unknown): RecommendationGenerationOptions {
+  const parsed = generationOptionsSchema.parse(input ?? {});
+  return {
+    focus: parsed.focus ?? 'auto',
+    tone: parsed.tone ?? 'standard',
+    audience: parsed.audience ?? '',
+    objective: parsed.objective ?? '',
+    additionalContext: parsed.additionalContext ?? '',
+  };
+}
 
 type LoadedContext = {
   context: RecommendationContext;
-  dataSource: 'production_subset' | 'database' | 'mock';
+  dataSource: 'production_subset' | 'database';
 };
 
 export type PostingCadence = {
@@ -237,12 +86,7 @@ export function classifyPostingCadence(
   };
 }
 
-let databaseFallbackLogged = false;
-
 async function loadContext(companyId: string): Promise<LoadedContext> {
-  const useMock = config.NODE_ENV === 'test' || config.RECOMMENDATION_DATA_SOURCE === 'mock';
-  if (useMock) return { context: await mockContextProvider.get(companyId), dataSource: 'mock' };
-
   if (
     config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
     config.RECOMMENDATION_DATA_SOURCE === 'auto'
@@ -262,23 +106,7 @@ async function loadContext(companyId: string): Promise<LoadedContext> {
     }
   }
 
-  try {
-    return { context: await postgresContextProvider.get(companyId), dataSource: 'database' };
-  } catch (error) {
-    const canUseSeedFallback =
-      config.RECOMMENDATION_DATA_SOURCE === 'auto' && companyId === '900001';
-    if (
-      config.RECOMMENDATION_DATA_SOURCE === 'database' ||
-      (error instanceof CompanyNotFoundError && !canUseSeedFallback)
-    ) {
-      throw error;
-    }
-    if (!databaseFallbackLogged) {
-      console.warn('Recommendation database is unavailable; using seed-compatible mock data.');
-      databaseFallbackLogged = true;
-    }
-    return { context: await mockContextProvider.get(companyId), dataSource: 'mock' };
-  }
+  return { context: await postgresContextProvider.get(companyId), dataSource: 'database' };
 }
 
 function relativePublishedAt(releases: PastRelease[]): string {
@@ -329,6 +157,8 @@ function genericSuggestions(context: RecommendationContext): ExistingSuggestion[
       ],
       sourceTitle: release.title,
       sourceReleaseId: release.id,
+      sourceUrl: release.sourceUrl,
+      sourceEvidence: release.summary,
       similarity: 0,
     };
   });
@@ -358,30 +188,45 @@ function genericNewOpportunity(context: RecommendationContext): NewOpportunity {
   };
 }
 
-function buildFallbackDashboard(loaded: LoadedContext): RecommendationDashboard {
-  const useCuratedSeedContent = loaded.context.company.id === '900001';
-  const cadence = classifyPostingCadence(loaded.context.pastReleases);
+function cadenceFor(
+  context: RecommendationContext,
+  options: RecommendationGenerationOptions,
+): PostingCadence {
+  const cadence = classifyPostingCadence(context.pastReleases);
+  return options.focus === 'auto'
+    ? cadence
+    : { ...cadence, recommendedFocus: options.focus };
+}
+
+function buildTemplateDashboard(
+  loaded: LoadedContext,
+  options: RecommendationGenerationOptions,
+): RecommendationDashboard {
+  const cadence = cadenceFor(loaded.context, options);
   return {
     company: loaded.context.company,
     stats: dashboardStats(loaded.context),
-    existingSuggestions: useCuratedSeedContent
-      ? structuredClone(demoSuggestions)
-      : genericSuggestions(loaded.context),
-    newOpportunity: useCuratedSeedContent
-      ? structuredClone(demoNewOpportunity)
-      : genericNewOpportunity(loaded.context),
+    existingSuggestions: genericSuggestions(loaded.context),
+    newOpportunity: genericNewOpportunity(loaded.context),
     meta: {
       generatedAt: new Date().toISOString(),
-      mode: 'demo',
+      mode: 'template',
       dataSource: loaded.dataSource,
       similarityMethod: 'OpenAI API未設定のため未実行',
       ...cadence,
+      generationId: randomUUID(),
+      conditions: options,
+      saved: false,
     },
   };
 }
 
-export async function getDemoDashboard(companyId = '900001'): Promise<RecommendationDashboard> {
-  return buildFallbackDashboard(await loadContext(companyId));
+export async function getTemplateDashboard(
+  companyId: string,
+  input?: unknown,
+): Promise<RecommendationDashboard> {
+  const options = normalizeGenerationOptions(input);
+  return buildTemplateDashboard(await loadContext(companyId), options);
 }
 
 const generatedPayloadSchema = z.object({
@@ -538,6 +383,7 @@ async function generateCopy(
   context: RecommendationContext,
   similarExamples: RankedSimilarRelease[],
   cadence: PostingCadence,
+  options: RecommendationGenerationOptions,
 ) {
   const promptCompany = {
     name: context.company.name,
@@ -564,7 +410,7 @@ async function generateCopy(
           {
             type: 'input_text',
             text:
-              'あなたは中小企業専門の広報編集者です。自社の過去配信を活かした企画4件と、過去に発信していない魅力を掘り起こす企画1件を日本語で提案してください。recommendedFocusがexistingの場合は、久しぶりの配信を無理なく再開できるよう、左側の過去記事活用案を最優先で作ってください。recommendedFocusがnewの場合は、最近も配信している企業の発信が単調にならないよう、右側の未発信ジャンルを明確に差別化してください。各contentOutlineは見出しだけで終わらせず、「見出し｜本文に使える具体例の文章」の形式にし、一般論ではなく入力データの固有情報を反映してください。ただし、自社データに存在しない実績・制度・人数・顧客の声は事実として作らず、未確認事項は「取材で確かめる」「例えば」などの企画仮説として表現してください。既存企画はそれぞれ実在するsourceReleaseIdを1つ指定し、できるだけ異なる過去配信を起点にしてください。他社類似事例は切り口の参考に限り、社名・商品名・実績を自社の事実として転用しないでください。タイトルは具体的で、人や判断が見える表現を優先してください。',
+              'あなたは中小企業専門の広報編集者です。自社の過去配信を活かした企画4件と、過去に発信していない魅力を掘り起こす企画1件を日本語で提案してください。recommendedFocusがexistingの場合は、久しぶりの配信を無理なく再開できるよう、左側の過去記事活用案を最優先で作ってください。recommendedFocusがnewの場合は、最近も配信している企業の発信が単調にならないよう、右側の未発信ジャンルを明確に差別化してください。generationConditionsの読者・目的・文体・追加情報を反映してください。各contentOutlineは見出しだけで終わらせず、「見出し｜本文に使える具体例の文章」の形式にし、一般論ではなく入力データの固有情報を反映してください。ただし、自社データに存在しない実績・制度・人数・顧客の声は事実として作らず、未確認事項は「取材で確かめる」「例えば」などの企画仮説として表現してください。既存企画はそれぞれ実在するsourceReleaseIdを1つ指定し、できるだけ異なる過去配信を起点にしてください。他社類似事例は切り口の参考に限り、社名・商品名・実績を自社の事実として転用しないでください。タイトルは具体的で、人や判断が見える表現を優先してください。',
           },
         ],
       },
@@ -576,6 +422,7 @@ async function generateCopy(
             text: JSON.stringify({
               company: promptCompany,
               postingCadence: cadence,
+              generationConditions: options,
               pastReleases: promptReleases,
               similarExamples,
             }),
@@ -701,51 +548,106 @@ async function rankSimilarExamples(context: RecommendationContext): Promise<Rank
 type DashboardCacheEntry = { value: RecommendationDashboard; expiresAt: number };
 const dashboardCache = new Map<string, DashboardCacheEntry>();
 const inFlightGeneration = new Map<string, Promise<RecommendationDashboard>>();
+let storageWarningLogged = false;
 
-function cachedDashboard(companyId: string): RecommendationDashboard | undefined {
-  const entry = dashboardCache.get(companyId);
+function cacheKeyFor(companyId: string, options: RecommendationGenerationOptions): string {
+  const digest = createHash('sha256')
+    .update(JSON.stringify({
+      version: 3,
+      companyId,
+      options,
+      dataSource: config.RECOMMENDATION_DATA_SOURCE,
+      textModel: config.OPENAI_TEXT_MODEL,
+      embeddingModel: config.OPENAI_EMBEDDING_MODEL,
+    }))
+    .digest('hex');
+  return `${companyId}:${digest}`;
+}
+
+function cachedDashboard(cacheKey: string): RecommendationDashboard | undefined {
+  const entry = dashboardCache.get(cacheKey);
   if (!entry) return undefined;
   if (entry.expiresAt <= Date.now()) {
-    dashboardCache.delete(companyId);
+    dashboardCache.delete(cacheKey);
     return undefined;
   }
   return entry.value;
 }
 
-function cacheDashboard(companyId: string, dashboard: RecommendationDashboard): void {
-  dashboardCache.set(companyId, {
+function cacheDashboard(cacheKey: string, dashboard: RecommendationDashboard): void {
+  dashboardCache.set(cacheKey, {
     value: dashboard,
     expiresAt: Date.now() + config.RECOMMENDATION_CACHE_TTL_MS,
   });
 }
 
-export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
-  if (config.NODE_ENV === 'test' || config.RECOMMENDATION_DATA_SOURCE === 'mock') {
-    return mockContextProvider.listCompanies();
+async function persistentCachedDashboard(
+  cacheKey: string,
+): Promise<RecommendationDashboard | undefined> {
+  if (!config.RECOMMENDATION_STORAGE_ENABLED) return undefined;
+  try {
+    return await findCachedRecommendation(cacheKey);
+  } catch (error) {
+    if (!storageWarningLogged) {
+      console.warn('Persistent recommendation cache is unavailable; using memory cache.', error);
+      storageWarningLogged = true;
+    }
+    return undefined;
   }
+}
+
+async function persistDashboard(
+  cacheKey: string,
+  companyId: string,
+  dashboard: RecommendationDashboard,
+  options: RecommendationGenerationOptions,
+): Promise<RecommendationDashboard> {
+  cacheDashboard(cacheKey, dashboard);
+  if (!config.RECOMMENDATION_STORAGE_ENABLED) return dashboard;
+  try {
+    await insertRecommendationGeneration(
+      cacheKey,
+      companyId,
+      dashboard,
+      options,
+      config.RECOMMENDATION_CACHE_TTL_MS,
+    );
+  } catch (error) {
+    if (!storageWarningLogged) {
+      console.warn('Could not persist recommendation generation; continuing in memory.', error);
+      storageWarningLogged = true;
+    }
+  }
+  return dashboard;
+}
+
+export function refreshEditedDashboardCache(dashboard: RecommendationDashboard): void {
+  for (const [key, entry] of dashboardCache) {
+    if (entry.value.meta.generationId === dashboard.meta.generationId) {
+      dashboardCache.set(key, { ...entry, value: dashboard });
+    }
+  }
+}
+
+export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
   if (
     config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
     config.RECOMMENDATION_DATA_SOURCE === 'auto'
   ) {
     try {
       const companies = await productionSubsetContextProvider.listCompanies();
-      if (companies.length > 0) return companies;
+      if (companies.length > 0 || config.RECOMMENDATION_DATA_SOURCE === 'production_subset') {
+        return companies;
+      }
     } catch (error) {
       if (config.RECOMMENDATION_DATA_SOURCE === 'production_subset') throw error;
     }
   }
-  try {
-    const companies = await postgresContextProvider.listCompanies();
-    return companies.length > 0 ? companies : mockContextProvider.listCompanies();
-  } catch (error) {
-    if (config.RECOMMENDATION_DATA_SOURCE === 'database') throw error;
-    return mockContextProvider.listCompanies();
-  }
+  return postgresContextProvider.listCompanies();
 }
 
 async function resolveCompanyId(companyId?: string): Promise<string> {
   if (companyId) return companyId;
-  if (config.NODE_ENV === 'test' || config.RECOMMENDATION_DATA_SOURCE === 'mock') return '900001';
 
   if (
     config.RECOMMENDATION_DATA_SOURCE === 'production_subset' ||
@@ -755,59 +657,66 @@ async function resolveCompanyId(companyId?: string): Promise<string> {
       const companies = await productionSubsetContextProvider.listCompanies();
       const firstCompany = companies[0];
       if (firstCompany) return firstCompany.id;
+      if (config.RECOMMENDATION_DATA_SOURCE === 'production_subset') {
+        throw new Error('production_subset contains no companies with published releases');
+      }
     } catch (error) {
       if (config.RECOMMENDATION_DATA_SOURCE === 'production_subset') throw error;
     }
   }
 
-  try {
-    const companies = await postgresContextProvider.listCompanies();
-    const firstCompany = companies[0];
-    if (firstCompany) return firstCompany.id;
-  } catch (error) {
-    if (config.RECOMMENDATION_DATA_SOURCE === 'database') throw error;
-  }
-  return '900001';
+  const companies = await postgresContextProvider.listCompanies();
+  const firstCompany = companies[0];
+  if (firstCompany) return firstCompany.id;
+  throw new Error('Database contains no companies with published releases');
 }
 
-export async function getRecommendationDashboard(companyId?: string) {
+export async function getRecommendationDashboard(companyId?: string, input?: unknown) {
   const resolvedCompanyId = await resolveCompanyId(companyId);
-  const cached = cachedDashboard(resolvedCompanyId);
+  const options = normalizeGenerationOptions(input);
+  const cacheKey = cacheKeyFor(resolvedCompanyId, options);
+  const cached = cachedDashboard(cacheKey);
   if (cached) return cached;
-  if (!config.OPENAI_API_KEY) {
-    const fallback = await getDemoDashboard(resolvedCompanyId);
-    cacheDashboard(resolvedCompanyId, fallback);
-    return fallback;
+  const persisted = await persistentCachedDashboard(cacheKey);
+  if (persisted) {
+    cacheDashboard(cacheKey, persisted);
+    return persisted;
   }
-  return regenerateRecommendationDashboard(resolvedCompanyId);
+  return regenerateRecommendationDashboard(resolvedCompanyId, options);
 }
 
 export async function regenerateRecommendationDashboard(
   companyId?: string,
+  input?: unknown,
 ): Promise<RecommendationDashboard> {
   const resolvedCompanyId = await resolveCompanyId(companyId);
-  const activeGeneration = inFlightGeneration.get(resolvedCompanyId);
+  const options = normalizeGenerationOptions(input);
+  const cacheKey = cacheKeyFor(resolvedCompanyId, options);
+  const activeGeneration = inFlightGeneration.get(cacheKey);
   if (activeGeneration) return activeGeneration;
 
-  const generation = generateDashboard(resolvedCompanyId).finally(() => {
-    inFlightGeneration.delete(resolvedCompanyId);
+  const generation = generateDashboard(resolvedCompanyId, options, cacheKey).finally(() => {
+    inFlightGeneration.delete(cacheKey);
   });
-  inFlightGeneration.set(resolvedCompanyId, generation);
+  inFlightGeneration.set(cacheKey, generation);
   return generation;
 }
 
-async function generateDashboard(companyId: string): Promise<RecommendationDashboard> {
+async function generateDashboard(
+  companyId: string,
+  options: RecommendationGenerationOptions,
+  cacheKey: string,
+): Promise<RecommendationDashboard> {
   const loaded = await loadContext(companyId);
   if (!config.OPENAI_API_KEY || loaded.context.pastReleases.length === 0) {
-    const fallback = buildFallbackDashboard(loaded);
-    cacheDashboard(companyId, fallback);
-    return fallback;
+    const dashboard = buildTemplateDashboard(loaded, options);
+    return persistDashboard(cacheKey, companyId, dashboard, options);
   }
 
   try {
-    const cadence = classifyPostingCadence(loaded.context.pastReleases);
+    const cadence = cadenceFor(loaded.context, options);
     const similarExamples = await rankSimilarExamples(loaded.context);
-    const generated = await generateCopy(loaded.context, similarExamples, cadence);
+    const generated = await generateCopy(loaded.context, similarExamples, cadence, options);
     const similarities = await scoreSuggestions(generated.existingSuggestions, loaded.context.pastReleases);
     const releaseById = new Map(loaded.context.pastReleases.map((release) => [release.id, release]));
     const defaultSource = loaded.context.pastReleases[0]!;
@@ -818,6 +727,8 @@ async function generateDashboard(companyId: string): Promise<RecommendationDashb
           ...suggestion,
           sourceReleaseId: source.id,
           sourceTitle: source.title,
+          sourceUrl: source.sourceUrl,
+          sourceEvidence: source.summary,
           similarity: similarities[index] ?? 0,
         };
       })
@@ -833,14 +744,15 @@ async function generateDashboard(companyId: string): Promise<RecommendationDashb
         dataSource: loaded.dataSource,
         similarityMethod: `${config.OPENAI_EMBEDDING_MODEL} のコサイン類似度`,
         ...cadence,
+        generationId: randomUUID(),
+        conditions: options,
+        saved: false,
       },
     };
-    cacheDashboard(companyId, dashboard);
-    return dashboard;
+    return persistDashboard(cacheKey, companyId, dashboard, options);
   } catch (error) {
-    console.error('Recommendation generation failed; serving demo data instead.', error);
-    const fallback = buildFallbackDashboard(loaded);
-    cacheDashboard(companyId, fallback);
-    return fallback;
+    console.error('Recommendation generation failed; serving template-generated recommendations.', error);
+    const dashboard = buildTemplateDashboard(loaded, options);
+    return persistDashboard(cacheKey, companyId, dashboard, options);
   }
 }
