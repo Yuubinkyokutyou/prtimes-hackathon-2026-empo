@@ -2,6 +2,8 @@
 
 React + Node.js/TypeScript + PostgreSQL で構成したアプリケーションです。
 
+過去のプレスリリースをもとにした次回企画と、まだ発信していない企業の魅力を発見する企画を提案するダッシュボードです。API キー未設定時はダミーデータで全画面・操作を確認できます。
+
 ## 必要なもの
 
 - Docker Desktop（Docker Compose v2 を含む）
@@ -75,6 +77,30 @@ EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL �
 | `PORT` | API の待受ポート | `3000` |
 | `CORS_ORIGIN` | 許可するフロントの Origin（カンマ区切り可） | `https://example.com` |
 | `VITE_API_BASE_URL` | ブラウザから見た API のパス | `/api` |
+| `OPENAI_API_KEY` | 提案生成と埋め込み作成（未設定時はデモモード） | `sk-...` |
+| `OPENAI_TEXT_MODEL` | 提案文生成モデル | `gpt-5-mini` |
+| `OPENAI_EMBEDDING_MODEL` | 過去記事との類似度計算用モデル | `text-embedding-3-small` |
+| `OPENAI_TIMEOUT_MS` | OpenAI API のタイムアウト（ms） | `45000` |
+| `RECOMMENDATION_DATA_SOURCE` | データ取得元（`auto` / `database` / `mock`） | `auto` |
+| `RECOMMENDATION_CACHE_TTL_MS` | 生成結果のキャッシュ時間（ms） | `900000` |
+
+OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+
+## ダミーデータから実データへの差し替え
+
+企業情報と過去配信は `RecommendationContextProvider` に集約しています。通常は `PostgresRecommendationContextProvider` が `company`、`release`、`release_statistic`、`release_keyword` などから取得し、DBに接続できない開発環境だけseed準拠モックへ戻ります。`RECOMMENDATION_DATA_SOURCE=database` を設定すると、DB障害時にフォールバックせずエラーとして検出できます。
+
+ローカルのPostgreSQLは新規ボリューム作成時に `init.sql`、続いて `seed.sql` を自動適用します。既存ボリュームには自動では再適用されないため、データを保持したい場合は次のように手動適用してください。
+
+```bash
+docker compose exec -T db psql -U team_empo -d team_empo < seed.sql
+```
+
+## 提案API
+
+- `GET /api/recommendation-companies`: 配信実績のある企業一覧
+- `GET /api/recommendations?companyId=900001`: キャッシュ済み提案、または初回生成
+- `POST /api/recommendations/generate`: キャッシュを更新する再生成
 
 ## ディレクトリ
 

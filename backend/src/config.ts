@@ -16,6 +16,12 @@ const schema = z.object({
     .default('true')
     .transform((value) => value === 'true'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_TEXT_MODEL: z.string().default('gpt-5-mini'),
+  OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
+  RECOMMENDATION_DATA_SOURCE: z.enum(['auto', 'database', 'mock']).default('auto'),
+  RECOMMENDATION_CACHE_TTL_MS: z.coerce.number().int().positive().default(900_000),
 });
 
 const parsed = schema.safeParse(process.env);

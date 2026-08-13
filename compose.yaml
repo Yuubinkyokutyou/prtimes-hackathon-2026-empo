@@ -13,6 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+      - ./seed.sql:/docker-entrypoint-initdb.d/002-seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -31,6 +32,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-team_empo}:${POSTGRES_PASSWORD:-local_password}@db:5432/${POSTGRES_DB:-team_empo}
       DATABASE_SSL: "false"
       CORS_ORIGIN: http://localhost:${FRONTEND_PORT:-5173}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_TEXT_MODEL: ${OPENAI_TEXT_MODEL:-gpt-5-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_TIMEOUT_MS: ${OPENAI_TIMEOUT_MS:-45000}
+      RECOMMENDATION_DATA_SOURCE: ${RECOMMENDATION_DATA_SOURCE:-auto}
+      RECOMMENDATION_CACHE_TTL_MS: ${RECOMMENDATION_CACHE_TTL_MS:-900000}
     ports:
       - "${API_PORT:-3000}:3000"
     volumes:
