@@ -13,12 +13,26 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
-      - ./seed.sql:/docker-entrypoint-initdb.d/002-seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: development
+    restart: "no"
+    command: ["npm", "run", "migrate", "-w", "backend"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-team_empo}:${POSTGRES_PASSWORD:-local_password}@db:5432/${POSTGRES_DB:-team_empo}
+      DATABASE_SSL: "false"
+    depends_on:
+      db:
+        condition: service_healthy
 
   backend:
     build:
@@ -40,14 +54,15 @@ services:
       PRODUCTION_SUBSET_DIRECTORY: /app/database/production_subset/csv
       RECOMMENDATION_CACHE_TTL_MS: ${RECOMMENDATION_CACHE_TTL_MS:-900000}
       RECOMMENDATION_STALE_AFTER_DAYS: ${RECOMMENDATION_STALE_AFTER_DAYS:-60}
+      RECOMMENDATION_STORAGE_ENABLED: ${RECOMMENDATION_STORAGE_ENABLED:-true}
     ports:
       - "${API_PORT:-3000}:3000"
     volumes:
       - ./backend/src:/app/backend/src
       - ./database/production_subset/csv:/app/database/production_subset/csv:ro
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s

@@ -1,5 +1,6 @@
 import { type QueryResultRow } from 'pg';
 import { pool } from './db.js';
+import { buildReleaseEvidence } from './recommendationEvidence.js';
 import type {
   CompanyProfile,
   CompanySummary,
@@ -37,6 +38,7 @@ type ReleaseRow = QueryResultRow & {
   page_view: number | null;
   like_count: number | null;
   keywords: string[] | null;
+  source_url: string | null;
 };
 
 type CompanySummaryRow = QueryResultRow & {
@@ -92,12 +94,18 @@ function toPastRelease(row: ReleaseRow): PastRelease {
     id: String(row.release_id),
     title: row.title,
     genre: row.genre,
-    summary: row.lead_paragraph || row.subtitle,
+    summary: buildReleaseEvidence({
+      title: row.title,
+      subtitle: row.subtitle,
+      leadParagraph: row.lead_paragraph,
+      body: row.body,
+    }),
     body: row.body.slice(0, 4_000),
     publishedAt: row.created_at.toISOString(),
     pageView: row.page_view ?? 0,
     likeCount: row.like_count ?? 0,
     keywords: row.keywords ?? [],
+    sourceUrl: row.source_url ?? '',
   };
 }
 
@@ -114,6 +122,7 @@ const releaseSelect = `
     r.created_at,
     rs.page_view,
     rs.like_count,
+    MAX(w.release_url) AS source_url,
     COALESCE(
       array_agg(DISTINCT k.keyword_name) FILTER (WHERE k.keyword_name IS NOT NULL),
       ARRAY[]::varchar[]
@@ -126,6 +135,8 @@ const releaseSelect = `
   LEFT JOIN release_keyword AS rk
     ON rk.company_id = r.company_id AND rk.release_id = r.release_id
   LEFT JOIN keyword AS k ON k.keyword_id = rk.keyword_id
+  LEFT JOIN webclipping_list AS w
+    ON w.company_id = r.company_id AND w.release_id = r.release_id
 `;
 
 export class PostgresRecommendationContextProvider implements RecommendationContextProvider {

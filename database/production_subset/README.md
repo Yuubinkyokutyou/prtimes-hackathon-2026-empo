@@ -21,7 +21,7 @@ PRODUCTION_SUBSET_DB_CONTAINER=team-empo-db npm run db:replace-production-subset
 
 このコマンドはCSVの存在とヘッダーを確認し、ステージングへ取り込んで主キー・外部キーを検証します。検証に成功した場合だけ、開発DBの15テーブルを空にしてCSVの内容へ置き換えます。削除と再投入は同一トランザクションのため、途中で失敗した場合は元のデータへロールバックされます。
 
-> **注意:** `--yes` は既存の開発データ（ダミーデータを含む）をすべて削除する確認オプションです。本番DBに接続するCompose設定では実行しないでください。
+> **注意:** `--yes` は既存の開発データをすべて削除する確認オプションです。本番DBに接続するCompose設定では実行しないでください。
 
 ## 1. 本番DBからCSVを出力
 
@@ -64,9 +64,9 @@ VALUES (1, 1000); -- 過去1年、各対象テーブル最大1,000件
 15ファイルのImport後、開発DBの Query Tool で
 [`20_apply_to_development.sql`](./20_apply_to_development.sql) を実行します。
 
-外部キー順に反映し、主キーが既にある行は本番の値で更新します。対象外の既存ダミーデータは残ります。最後の結果で、各行の `csv_rows` と `matched_in_public` が一致していれば反映完了です。
+外部キー順に反映し、主キーが既にある行は本番の値で更新します。CSVの対象外である既存の開発データは残ります。最後の結果で、各行の `csv_rows` と `matched_in_public` が一致していれば反映完了です。
 
-既存ダミーデータも削除する場合は、手動Import後に
+既存の開発データも削除する場合は、手動Import後に
 [`25_validate_staging.sql`](./25_validate_staging.sql)、続けて
 [`30_replace_development_data.sql`](./30_replace_development_data.sql) を実行します。
 

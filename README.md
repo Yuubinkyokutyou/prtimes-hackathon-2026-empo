@@ -2,7 +2,7 @@
 
 React + Node.js/TypeScript + PostgreSQL で構成したアプリケーションです。
 
-過去のプレスリリースをもとにした次回企画と、まだ発信していない企業の魅力を発見する企画を提案するダッシュボードです。API キー未設定時はダミーデータで全画面・操作を確認できます。
+過去のプレスリリースをもとにした次回企画と、まだ発信していない企業の魅力を発見する企画を提案するダッシュボードです。OpenAI API キー未設定時も、選択したデータソースの企業情報と配信実績からテンプレートで提案を作成します。
 
 ## 必要なもの
 
@@ -20,7 +20,7 @@ docker compose up --build
 - API: http://localhost:3000/api/health
 - PostgreSQL: `localhost:5432`（使用中の場合は `.env` の `POSTGRES_PORT` を変更）
 
-初回起動時にルートの `init.sql` が自動実行されます。DB のデータを作り直す場合は、開発データが消えることを確認してから `docker compose down -v` を実行し、再度起動してください。
+初回起動時に、分析テーブルを開発環境へ再現するためのルート `init.sql` とデモ用の `seed.sql` がローカルDBだけに自動実行されます。その後、`migrations/*.sql` にあるアプリ用マイグレーションが適用されます。DB のデータを作り直す場合は、開発データが消えることを確認してから `docker compose down -v` を実行し、再度起動してください。
 
 標準設定ではローカルの `database/production_subset/csv` に配置した抽出データをバックエンドが直接読み取り、既存の開発DBを書き換えずに表示します。本番由来情報を含むためCSV本体はGit管理対象外です。DBへ完全に反映して検証したい場合だけ、次を実行します。
 
@@ -42,6 +42,7 @@ npm run dev
 ```bash
 npm run dev        # frontend / backend を同時起動
 npm run build      # 両方をビルド
+npm run migrate    # アプリ用DBマイグレーションを適用
 npm run typecheck  # TypeScript の型検査
 npm test           # backend のテスト
 npm run db:replace-production-subset -- --yes # 開発DBをproduction_subsetへ置換
@@ -49,30 +50,11 @@ npm run db:replace-production-subset -- --yes # 開発DBをproduction_subsetへ�
 
 ## EC2 + RDS へのデプロイ
 
-EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL は含まれません。
+EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL は含まれず、RDS for PostgreSQL に接続します。
 
-1. RDS for PostgreSQL を作成し、EC2 のセキュリティグループから RDS の 5432/TCP への接続を許可します。
-2. RDS に `init.sql` を一度だけ適用します。
+AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 のセットアップ、アプリ用マイグレーション、デプロイ、疎通確認までの手順は [EC2 + RDS デプロイ手順](docs/EC2_RDS_DEPLOY.md) を参照してください。
 
-   ```bash
-   psql "host=<RDS_ENDPOINT> port=5432 dbname=<DB_NAME> user=<DB_USER> sslmode=require" -f init.sql
-   ```
-
-3. EC2 上で `.env.ec2.example` を `.env.ec2` にコピーし、`DATABASE_URL` と `CORS_ORIGIN` を変更します。
-4. 起動します。
-
-   ```bash
-   docker compose --env-file .env.ec2 -f compose.ec2.yaml up -d --build
-   ```
-
-5. 確認します。
-
-   ```bash
-   curl http://localhost/api/health
-   curl http://localhost/api/health/db
-   ```
-
-本番では EC2 の 80 番ポートを直接公開するより、ALB または HTTPS を設定したリバースプロキシを前段に置く構成を推奨します。RDS は public access を無効にし、認証情報は AWS Systems Manager Parameter Store または Secrets Manager で管理してください。
+`init.sql` は分析環境をローカルに再現するためのもので、本番RDSへは適用しません。アプリ固有テーブルの追加方法は [アプリ用データベースマイグレーション](docs/DATABASE_MIGRATIONS.md) を参照してください。
 
 ## 環境変数
 
@@ -80,24 +62,25 @@ EC2 では `compose.ec2.yaml` を使います。この Compose に PostgreSQL �
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL 接続文字列 | `postgresql://user:pass@db:5432/app` |
 | `DATABASE_SSL` | RDS への TLS 接続 | `true` |
-| `DATABASE_SSL_REJECT_UNAUTHORIZED` | 証明書検証（通常は `true`） | `true` |
+| `DATABASE_SSL_REJECT_UNAUTHORIZED` | 証明書検証（ハッカソンは `false`、本番は `true`） | `false` |
 | `PORT` | API の待受ポート | `3000` |
 | `CORS_ORIGIN` | 許可するフロントの Origin（カンマ区切り可） | `https://example.com` |
 | `VITE_API_BASE_URL` | ブラウザから見た API のパス | `/api` |
-| `OPENAI_API_KEY` | 提案生成と埋め込み作成（未設定時はデモモード） | `sk-...` |
+| `OPENAI_API_KEY` | 提案生成と埋め込み作成（未設定時は実データ由来のテンプレート生成） | `sk-...` |
 | `OPENAI_TEXT_MODEL` | 提案文生成モデル | `gpt-5-mini` |
 | `OPENAI_EMBEDDING_MODEL` | 過去記事との類似度計算用モデル | `text-embedding-3-small` |
 | `OPENAI_TIMEOUT_MS` | OpenAI API のタイムアウト（ms） | `300000` |
-| `RECOMMENDATION_DATA_SOURCE` | データ取得元（`production_subset` / `auto` / `database` / `mock`） | `production_subset` |
+| `RECOMMENDATION_DATA_SOURCE` | データ取得元（`production_subset` / `auto` / `database`） | `production_subset` |
 | `PRODUCTION_SUBSET_DIRECTORY` | production_subset CSVディレクトリ | `database/production_subset/csv` |
 | `RECOMMENDATION_CACHE_TTL_MS` | 生成結果のキャッシュ時間（ms） | `900000` |
 | `RECOMMENDATION_STALE_AFTER_DAYS` | 左側の過去記事活用案を優先する最終投稿日からの日数 | `60` |
+| `RECOMMENDATION_STORAGE_ENABLED` | 生成結果・履歴・編集内容をPostgreSQLへ保存 | `true` |
 
-OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。キャッシュと生成履歴は `recommendation_generation` テーブルへ永続化され、同じ企業・条件の結果はプロセス再起動後もTTL内なら再利用されます。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
 
-## ダミーデータから実データへの差し替え
+## データソース
 
-企業情報と過去配信は `RecommendationContextProvider` に集約しています。通常は `PostgresRecommendationContextProvider` が `company`、`release`、`release_statistic`、`release_keyword` などから取得し、DBに接続できない開発環境だけseed準拠モックへ戻ります。`RECOMMENDATION_DATA_SOURCE=database` を設定すると、DB障害時にフォールバックせずエラーとして検出できます。
+企業情報と過去配信は `RecommendationContextProvider` に集約しています。`production_subset` は抽出CSVを直接参照し、`database` は `PostgresRecommendationContextProvider` が `company`、`release`、`release_statistic`、`release_keyword` などから取得します。データソースを読めない場合は架空データへフォールバックせず、APIエラーとして検出します。
 
 ローカルでは `RECOMMENDATION_DATA_SOURCE=production_subset` を標準とし、CSVを直接参照します。開発DBそのものをCSVへ置き換える必要がある場合だけ、次のコマンドで主キー・外部キーを検証してから置き換えます。
 
@@ -114,13 +97,21 @@ npm run db:replace-production-subset -- --yes
 - `GET /api/recommendation-companies`: 配信実績のある企業一覧
 - `GET /api/recommendations?companyId=<company_id>`: キャッシュ済み提案、または初回生成（省略時はDBから自動選択）
 - `POST /api/recommendations/generate`: キャッシュを更新する再生成
+- `GET /api/recommendations/history?companyId=<company_id>`: 生成履歴
+- `GET /api/recommendations/history/<generation_id>`: 保存した生成結果
+- `PUT /api/recommendations/history/<generation_id>`: 編集した企画の保存
+- `POST /api/recommendations/export/docx`: 詳細表示中の1企画のWord / Google Docs取込用DOCX出力
+
+画面では生成条件（優先企画、文体、読者、目的、追加情報）の指定、企画編集・保存、履歴復元、根拠と元記事リンクの確認、Word・Google Docs・Markdown出力ができます。出力は企画詳細から実行し、表示中の1企画の「タイトル」と「おすすめ構成案・具体例」だけを対象とします。Google Docs出力は取込用DOCXをダウンロードし、新しいGoogle Docsを開くと同時に貼り付け用テキストをクリップボードへコピーします。
 
 ## ディレクトリ
 
 ```text
 frontend/          React + Vite + TypeScript
 backend/           Express + TypeScript + node-postgres
-init.sql           DB スキーマ
+init.sql           分析テーブルをローカル開発DBへ再現する初期化SQL
+seed.sql           ローカル開発用のデモデータ
+migrations/        アプリ固有テーブル用の番号付きマイグレーション
 compose.yaml       ローカル開発用（PostgreSQL を含む）
 compose.ec2.yaml   EC2/RDS 用（PostgreSQL を含まない）
 ```

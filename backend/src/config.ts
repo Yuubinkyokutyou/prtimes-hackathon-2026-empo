@@ -6,6 +6,11 @@ const booleanString = z
   .default('false')
   .transform((value) => value === 'true');
 
+const enabledBooleanString = z
+  .enum(['true', 'false'])
+  .default('true')
+  .transform((value) => value === 'true');
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -21,11 +26,12 @@ const schema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
   RECOMMENDATION_DATA_SOURCE: z
-    .enum(['auto', 'production_subset', 'database', 'mock'])
+    .enum(['auto', 'production_subset', 'database'])
     .default('auto'),
   PRODUCTION_SUBSET_DIRECTORY: z.string().optional(),
   RECOMMENDATION_CACHE_TTL_MS: z.coerce.number().int().positive().default(900_000),
   RECOMMENDATION_STALE_AFTER_DAYS: z.coerce.number().int().positive().default(60),
+  RECOMMENDATION_STORAGE_ENABLED: enabledBooleanString,
 });
 
 const parsed = schema.safeParse(process.env);
