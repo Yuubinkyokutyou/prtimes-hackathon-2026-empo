@@ -4,6 +4,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { buildReleaseEvidence } from './recommendationEvidence.js';
 import { CompanyNotFoundError } from './recommendationRepository.js';
+import { isSmeByCapital } from './smeClassification.js';
 import type {
   CompanyProfile,
   CompanyProfileResult,
@@ -24,6 +25,7 @@ type LoadedSubset = {
   companies: Map<string, CompanyProfile>;
   releases: Array<PastRelease & { companyId: string; companyName: string }>;
   releasesByCompany: Map<string, PastRelease[]>;
+  capitalByCompany: Map<string, number>;
 };
 
 function parseCsv(source: string): string[][] {
@@ -129,9 +131,11 @@ implements RecommendationContextProvider {
       readCsv(this.directory, '07_keyword.csv').map((row) => [value(row, 'keyword_id'), value(row, 'keyword_name')]),
     );
     const companies = new Map<string, CompanyProfile>();
+    const capitalByCompany = new Map<string, number>();
     for (const row of readCsv(this.directory, '09_company.csv')) {
       const companyId = value(row, 'company_id');
       const companyName = value(row, 'company_name');
+      capitalByCompany.set(companyId, numericValue(value(row, 'capital')));
       companies.set(companyId, {
         id: companyId,
         name: companyName,
@@ -207,7 +211,7 @@ implements RecommendationContextProvider {
       ownReleases.sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt));
     }
 
-    this.loaded = { companies, releases, releasesByCompany };
+    this.loaded = { companies, releases, releasesByCompany, capitalByCompany };
     return this.loaded;
   }
 
@@ -262,6 +266,10 @@ implements RecommendationContextProvider {
         releaseCount: releases.length,
         lastPublishedAt: releases[0]!.publishedAt,
         hasCachedRecommendation: false,
+        isSmeByCapital: isSmeByCapital(
+          company.industry,
+          loaded.capitalByCompany.get(company.id) ?? 0,
+        ),
       }));
   }
 }

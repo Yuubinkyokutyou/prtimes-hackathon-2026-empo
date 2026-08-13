@@ -102,6 +102,7 @@ export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | '
   releaseCount: number;
   lastPublishedAt: string;
   hasCachedRecommendation: boolean;
+  isSmeByCapital: boolean;
 };
 
 export type RecommendationCompanyProfile = {

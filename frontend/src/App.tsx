@@ -915,6 +915,7 @@ function HeaderCompanySwitcher({
   const [query, setQuery] = useState('');
   const [staleOnly, setStaleOnly] = useState(false);
   const [cachedOnly, setCachedOnly] = useState(true);
+  const [smeOnly, setSmeOnly] = useState(false);
   const selected = companies.find((company) => company.id === selectedCompanyId) ?? companies[0];
   const filteredCompanies = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ja-JP');
@@ -922,12 +923,13 @@ function HeaderCompanySwitcher({
       const staleDays = daysSince(company.lastPublishedAt);
       const matchesStale = !staleOnly || (staleDays !== null && staleDays >= 30);
       const matchesCache = !cachedOnly || company.hasCachedRecommendation;
+      const matchesSme = !smeOnly || company.isSmeByCapital;
       const matchesQuery = !normalized || `${company.name} ${company.industry} ${company.id}`
         .toLocaleLowerCase('ja-JP')
         .includes(normalized);
-      return matchesStale && matchesCache && matchesQuery;
+      return matchesStale && matchesCache && matchesSme && matchesQuery;
     }).slice(0, 100);
-  }, [cachedOnly, companies, query, staleOnly]);
+  }, [cachedOnly, companies, query, smeOnly, staleOnly]);
 
   return (
     <div className="pr-company-switcher">
@@ -976,16 +978,31 @@ function HeaderCompanySwitcher({
               type="search"
               value={query}
             />
-            <label className="pr-company-menu__filter">
-              <input checked={cachedOnly} onChange={(event) => setCachedOnly(event.target.checked)} type="checkbox" />
-              <span>提案キャッシュがある企業のみ</span>
-              <small>{companies.filter((company) => company.hasCachedRecommendation).length}社</small>
-            </label>
-            <label className="pr-company-menu__filter">
-              <input checked={staleOnly} onChange={(event) => setStaleOnly(event.target.checked)} type="checkbox" />
-              <span>30日以上投稿が止まっている企業のみ</span>
-              <small>{companies.filter((company) => (daysSince(company.lastPublishedAt) ?? -1) >= 30).length}社</small>
-            </label>
+            <fieldset className="pr-company-menu__filters">
+              <legend>絞り込み</legend>
+              <button
+                onClick={() => { setCachedOnly(true); setSmeOnly(false); setStaleOnly(false); }}
+                type="button"
+              >
+                初期状態に戻す
+              </button>
+              <label className="pr-company-menu__filter">
+                <input checked={cachedOnly} onChange={(event) => setCachedOnly(event.target.checked)} type="checkbox" />
+                <span>提案キャッシュあり</span>
+                <small>{companies.filter((company) => company.hasCachedRecommendation).length}社</small>
+              </label>
+              <label className="pr-company-menu__filter" title="従業員数は使わず、業種別の資本金基準のみで概算しています。">
+                <input checked={smeOnly} onChange={(event) => setSmeOnly(event.target.checked)} type="checkbox" />
+                <span>中小企業規模（資本金ベース）<em>概算</em></span>
+                <small>{companies.filter((company) => company.isSmeByCapital).length}社</small>
+              </label>
+              <label className="pr-company-menu__filter">
+                <input checked={staleOnly} onChange={(event) => setStaleOnly(event.target.checked)} type="checkbox" />
+                <span>30日以上投稿停止</span>
+                <small>{companies.filter((company) => (daysSince(company.lastPublishedAt) ?? -1) >= 30).length}社</small>
+              </label>
+              <p>中小企業規模は、資本金が確認できる企業を業種別基準で概算しています。</p>
+            </fieldset>
             <div className="pr-company-menu__summary">{filteredCompanies.length}社を表示</div>
             <div className="pr-company-menu__list">
               {filteredCompanies.map((company) => {

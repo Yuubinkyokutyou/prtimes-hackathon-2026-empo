@@ -2423,9 +2423,16 @@ main {
 .pr-company-menu__current strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .pr-company-menu > input[type="search"] { width: 100%; height: 44px; padding: 0 13px; border: 1px solid #cddde6; border-radius: 9px; color: #17263a; font: 500 13px "Noto Sans JP", sans-serif; }
 .pr-company-menu > input[type="search"]:focus { border-color: #168bc5; outline: 3px solid rgba(22, 139, 197, .12); }
-.pr-company-menu__filter { min-height: 48px; display: flex; align-items: center; gap: 9px; margin: 12px 0 5px; padding: 8px 11px; border-radius: 9px; background: #f2f8fb; color: #27485d; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pr-company-menu__filters { position: relative; display: grid; gap: 0; margin: 12px 0 5px; padding: 25px 10px 7px; border: 1px solid #dce8ee; border-radius: 11px; background: #f7fbfd; }
+.pr-company-menu__filters legend { position: absolute; top: 8px; left: 11px; padding: 0; color: #34596f; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.pr-company-menu__filters > button { position: absolute; top: 6px; right: 9px; padding: 2px 5px; border: 0; background: transparent; color: #38799e; font-size: 9px; font-weight: 700; }
+.pr-company-menu__filter { min-height: 35px; display: flex; align-items: center; gap: 8px; padding: 5px 2px; border-top: 1px solid #e6eff3; color: #27485d; font-size: 11px; font-weight: 700; cursor: pointer; }
+.pr-company-menu__filter:first-of-type { border-top: 0; }
 .pr-company-menu__filter input { width: 17px; height: 17px; accent-color: #1478b8; }
-.pr-company-menu__filter small { margin-left: auto; padding: 2px 7px; border-radius: 99px; background: #dceef7; color: #0b67a3; font-size: 10px; }
+.pr-company-menu__filter span { min-width: 0; }
+.pr-company-menu__filter em { margin-left: 5px; color: #718895; font-size: 8px; font-style: normal; font-weight: 600; }
+.pr-company-menu__filter small { margin-left: auto; padding: 2px 7px; border-radius: 99px; background: #dceef7; color: #0b67a3; font-size: 9px; white-space: nowrap; }
+.pr-company-menu__filters > p { margin: 5px 2px 0; color: #718895; font-size: 9px; line-height: 1.45; }
 .pr-company-menu__summary { margin: 9px 2px 6px; color: #7a8d99; font-size: 10px; }
 .pr-company-menu__list { min-height: 0; flex: 1 1 auto; overflow-y: auto; border-top: 1px solid #e7eff3; }
 .pr-company-menu__list > button { width: 100%; min-height: 76px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-bottom: 1px solid #edf2f5; background: #fff; color: #17263a; text-align: left; }
