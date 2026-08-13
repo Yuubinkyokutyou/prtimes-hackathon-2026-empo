@@ -1,0 +1,2 @@
+# Codex-managed worktrees need the local secrets and overrides from the main checkout.
+.env
