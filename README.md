@@ -110,6 +110,19 @@ AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 �
 
 OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、同じ企業・条件の結果は期限なくキャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、プロセス再起動後も再利用されます。明示的な再生成操作はキャッシュを使わず、新しい提案を生成します。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
 
+PostgreSQL上の企業IDを指定して、画面アクセス前に提案を生成・表示・キャッシュできます。`--company-id` は必要な社数だけ繰り返せます。企業がPostgreSQLに存在しない、または公開済み配信がない場合は `SKIP` されます。通常は既存キャッシュを表示し、強制的に作り直す場合だけ `--refresh` を付けます。実行時は `RECOMMENDATION_DATA_SOURCE=database` と `RECOMMENDATION_STORAGE_ENABLED=true` が必要です。
+
+```bash
+npm run recommendations:prewarm -- --company-id 101 --company-id 202
+npm run recommendations:prewarm -- --company-id 101 --refresh
+```
+
+EC2/RDS環境ではoperations用コンテナから実行します。
+
+```bash
+docker compose --env-file .env.ec2 -f compose.ec2.yaml --profile operations run --rm prewarm-recommendations --company-id 101 --company-id 202
+```
+
 EC2/RDS本番環境の全提案キャッシュをクリアする場合は、リポジトリのルートで `./scripts/clear-recommendation-cache-production.sh --yes` を実行します。生成履歴は保持されます。
 
 ## データソース

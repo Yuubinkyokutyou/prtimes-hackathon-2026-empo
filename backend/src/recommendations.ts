@@ -756,7 +756,6 @@ async function rankSimilarExamples(context: RecommendationContext): Promise<Rank
     .slice(0, 8);
 }
 
-const dashboardCache = new Map<string, RecommendationDashboard>();
 const inFlightGeneration = new Map<string, Promise<RecommendationDashboard>>();
 let storageWarningLogged = false;
 
@@ -774,14 +773,6 @@ function cacheKeyFor(companyId: string, options: RecommendationGenerationOptions
   return `${companyId}:${digest}`;
 }
 
-function cachedDashboard(cacheKey: string): RecommendationDashboard | undefined {
-  return dashboardCache.get(cacheKey);
-}
-
-function cacheDashboard(cacheKey: string, dashboard: RecommendationDashboard): void {
-  dashboardCache.set(cacheKey, dashboard);
-}
-
 async function persistentCachedDashboard(
   cacheKey: string,
 ): Promise<RecommendationDashboard | undefined> {
@@ -790,7 +781,7 @@ async function persistentCachedDashboard(
     return await findCachedRecommendation(cacheKey);
   } catch (error) {
     if (!storageWarningLogged) {
-      console.warn('Persistent recommendation cache is unavailable; using memory cache.', error);
+      console.warn('Persistent recommendation cache is unavailable; recommendations will be regenerated.', error);
       storageWarningLogged = true;
     }
     return undefined;
@@ -803,7 +794,6 @@ async function persistDashboard(
   dashboard: RecommendationDashboard,
   options: RecommendationGenerationOptions,
 ): Promise<RecommendationDashboard> {
-  cacheDashboard(cacheKey, dashboard);
   if (!config.RECOMMENDATION_STORAGE_ENABLED) return dashboard;
   try {
     await insertRecommendationGeneration(
@@ -814,19 +804,11 @@ async function persistDashboard(
     );
   } catch (error) {
     if (!storageWarningLogged) {
-      console.warn('Could not persist recommendation generation; continuing in memory.', error);
+      console.warn('Could not persist recommendation generation; returning the uncached result.', error);
       storageWarningLogged = true;
     }
   }
   return dashboard;
-}
-
-export function refreshEditedDashboardCache(dashboard: RecommendationDashboard): void {
-  for (const [key, cached] of dashboardCache) {
-    if (cached.meta.generationId === dashboard.meta.generationId) {
-      dashboardCache.set(key, dashboard);
-    }
-  }
 }
 
 export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
@@ -846,6 +828,10 @@ export async function listRecommendationCompanies(): Promise<CompanySummary[]> {
   }
   companies = await postgresContextProvider.listCompanies();
   return markCompaniesWithCachedRecommendations(companies);
+}
+
+export async function listPostgresRecommendationCompanies(): Promise<CompanySummary[]> {
+  return markCompaniesWithCachedRecommendations(await postgresContextProvider.listCompanies());
 }
 
 async function markCompaniesWithCachedRecommendations(
@@ -924,14 +910,29 @@ export async function getRecommendationDashboard(companyId?: string, input?: unk
   const resolvedCompanyId = await resolveCompanyId(companyId);
   const options = normalizeGenerationOptions(input);
   const cacheKey = cacheKeyFor(resolvedCompanyId, options);
-  const cached = cachedDashboard(cacheKey);
-  if (cached) return cached;
   const persisted = await persistentCachedDashboard(cacheKey);
-  if (persisted) {
-    cacheDashboard(cacheKey, persisted);
-    return persisted;
-  }
+  if (persisted) return persisted;
   return regenerateRecommendationDashboard(resolvedCompanyId, options);
+}
+
+export async function prewarmRecommendationDashboard(
+  companyId: string,
+  input?: unknown,
+  refresh = false,
+): Promise<RecommendationDashboard> {
+  if (!config.RECOMMENDATION_STORAGE_ENABLED) {
+    throw new Error('RECOMMENDATION_STORAGE_ENABLED must be true to prewarm recommendations');
+  }
+
+  const options = normalizeGenerationOptions(input);
+  const dashboard = refresh
+    ? await regenerateRecommendationDashboard(companyId, options)
+    : await getRecommendationDashboard(companyId, options);
+  const persisted = await findCachedRecommendation(cacheKeyFor(companyId, options));
+  if (!persisted || persisted.meta.generationId !== dashboard.meta.generationId) {
+    throw new Error(`Recommendation for company ${companyId} was not persisted to PostgreSQL`);
+  }
+  return persisted;
 }
 
 export async function regenerateRecommendationDashboard(

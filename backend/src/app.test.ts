@@ -141,6 +141,16 @@ test('GET /api/recommendations returns 404 for an unknown company', async () => 
   assert.deepEqual(await response.json(), { error: 'Company not found' });
 });
 
+test('GET /api/recommendations does not retain an in-memory result cache', async () => {
+  const firstResponse = await fetch(`${baseUrl}/api/recommendations?companyId=1`);
+  const secondResponse = await fetch(`${baseUrl}/api/recommendations?companyId=1`);
+  assert.equal(firstResponse.status, 200);
+  assert.equal(secondResponse.status, 200);
+  const first = (await firstResponse.json()) as { meta: { generationId: string } };
+  const second = (await secondResponse.json()) as { meta: { generationId: string } };
+  assert.notEqual(first.meta.generationId, second.meta.generationId);
+});
+
 test('POST /api/recommendations/generate applies generation conditions without an API key', async () => {
   const response = await fetch(`${baseUrl}/api/recommendations/generate`, {
     method: 'POST',

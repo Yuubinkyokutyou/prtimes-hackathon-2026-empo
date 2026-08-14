@@ -13,7 +13,6 @@ import {
   getRecommendationDashboard,
   getRecommendationCompanyProfile,
   listRecommendationCompanies,
-  refreshEditedDashboardCache,
   regenerateRecommendationDashboard,
   regenerateRecommendationItem,
 } from './recommendations.js';
@@ -180,7 +179,6 @@ app.put('/api/recommendations/history/:id', async (request, response, next) => {
       response.status(404).json({ error: 'Recommendation history item not found' });
       return;
     }
-    refreshEditedDashboardCache(saved);
     response.json(saved);
   } catch (error) {
     next(error);
