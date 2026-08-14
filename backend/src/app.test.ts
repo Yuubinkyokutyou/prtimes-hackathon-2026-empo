@@ -97,13 +97,45 @@ test('GET /api/recommendation-companies returns selectable companies', async () 
   const response = await fetch(`${baseUrl}/api/recommendation-companies`);
   assert.equal(response.status, 200);
   const data = (await response.json()) as {
-    items: Array<{ id: string; name: string; releaseCount: number }>;
+    items: Array<{ id: string; name: string; releaseCount: number; lastPublishedAt: string; hasCachedRecommendation: boolean; isSmeByCapital: boolean }>;
   };
-  assert.deepEqual(data.items, [
-    { id: '1', name: '株式会社テスト空', initials: 'テ', industry: '情報通信業', releaseCount: 1 },
-    { id: '3', name: '株式会社テスト海', initials: 'テ', industry: 'サービス業', releaseCount: 1 },
-    { id: '2', name: '株式会社テスト森', initials: 'テ', industry: '情報通信業', releaseCount: 1 },
+  assert.deepEqual(data.items.map(({ lastPublishedAt: _lastPublishedAt, ...company }) => company), [
+    { id: '1', name: '株式会社テスト空', initials: 'テ', industry: '情報通信業', releaseCount: 1, hasCachedRecommendation: false, isSmeByCapital: true },
+    { id: '2', name: '株式会社テスト森', initials: 'テ', industry: '情報通信業', releaseCount: 1, hasCachedRecommendation: false, isSmeByCapital: true },
   ]);
+  assert(data.items.every((company) => Number.isFinite(Date.parse(company.lastPublishedAt))));
+});
+
+test('GET /api/recommendation-companies/:companyId returns a lightweight company profile', async () => {
+  const response = await fetch(`${baseUrl}/api/recommendation-companies/1`);
+  assert.equal(response.status, 200);
+  const data = (await response.json()) as {
+    company: { id: string; name: string; industry: string };
+    stats: { releaseCount: number; lastPublishedAt: string | null };
+    meta: { dataSource: string };
+  };
+  assert.deepEqual(data.company, {
+    id: '1',
+    name: '株式会社テスト空',
+    initials: 'テ',
+    industry: '情報通信業',
+    location: '東京都千代田区',
+    founded: '2020年',
+    capital: '5,000,000円',
+    website: 'https://example.com',
+    description: '地域企業の情報発信を支援する架空企業です。',
+  });
+  assert.equal(data.stats.releaseCount, 1);
+  assert(data.stats.lastPublishedAt && Number.isFinite(Date.parse(data.stats.lastPublishedAt)));
+  assert.equal(data.meta.dataSource, 'production_subset');
+  assert.equal('existingSuggestions' in data, false);
+  assert.equal('newOpportunities' in data, false);
+});
+
+test('GET /api/recommendation-companies/:companyId returns 404 for an unknown company', async () => {
+  const response = await fetch(`${baseUrl}/api/recommendation-companies/999999`);
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: 'Company not found' });
 });
 
 test('saved history from the former singular opportunity shape remains readable', async () => {

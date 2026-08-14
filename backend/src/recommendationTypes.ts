@@ -21,6 +21,7 @@ export type PastRelease = {
   likeCount: number;
   keywords: string[];
   sourceUrl: string;
+  imageUrl: string;
 };
 
 export type SimilarRelease = PastRelease & {
@@ -45,6 +46,7 @@ export type ExistingSuggestion = {
   sourceTitle: string;
   sourceReleaseId: string;
   sourceUrl: string;
+  sourceImageUrl: string;
   similarity: number;
 };
 
@@ -116,9 +118,27 @@ export type RecommendationHistoryItem = {
 
 export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | 'industry'> & {
   releaseCount: number;
+  lastPublishedAt: string;
+  hasCachedRecommendation: boolean;
+  isSmeByCapital: boolean;
+};
+
+export type CompanyProfileResult = {
+  company: CompanyProfile;
+  stats: {
+    releaseCount: number;
+    lastPublishedAt: string | null;
+  };
+};
+
+export type RecommendationCompanyProfile = CompanyProfileResult & {
+  meta: {
+    dataSource: 'production_subset' | 'database';
+  };
 };
 
 export interface RecommendationContextProvider {
   get(companyId: string): Promise<RecommendationContext>;
+  getCompanyProfile(companyId: string): Promise<CompanyProfileResult>;
   listCompanies(): Promise<CompanySummary[]>;
 }

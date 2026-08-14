@@ -1,8 +1,10 @@
 import { type QueryResultRow } from 'pg';
 import { pool } from './db.js';
 import { buildReleaseEvidence } from './recommendationEvidence.js';
+import { isSmeByCapital } from './smeClassification.js';
 import type {
   CompanyProfile,
+  CompanyProfileResult,
   CompanySummary,
   PastRelease,
   RecommendationContext,
@@ -39,13 +41,21 @@ type ReleaseRow = QueryResultRow & {
   like_count: number | null;
   keywords: string[] | null;
   source_url: string | null;
+  image_url: string | null;
 };
 
 type CompanySummaryRow = QueryResultRow & {
   company_id: number;
   company_name: string;
   industry_name: string;
+  capital: number | string;
   release_count: string;
+  last_published_at: Date;
+};
+
+type CompanyProfileRow = CompanyRow & {
+  release_count: string;
+  last_published_at: Date | null;
 };
 
 export class CompanyNotFoundError extends Error {
@@ -106,6 +116,7 @@ function toPastRelease(row: ReleaseRow): PastRelease {
     likeCount: row.like_count ?? 0,
     keywords: row.keywords ?? [],
     sourceUrl: row.source_url ?? '',
+    imageUrl: row.image_url ?? '',
   };
 }
 
@@ -118,6 +129,7 @@ const releaseSelect = `
     r.subtitle,
     r.lead_paragraph,
     r.body,
+    COALESCE(NULLIF(r.main_image_fastly, ''), r.main_image) AS image_url,
     COALESCE(rt.release_type_name, 'その他') AS genre,
     r.created_at,
     rs.page_view,
@@ -212,19 +224,71 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
     };
   }
 
+  async getCompanyProfile(companyId: string): Promise<CompanyProfileResult> {
+    const numericCompanyId = Number(companyId);
+    if (!Number.isSafeInteger(numericCompanyId) || numericCompanyId <= 0) {
+      throw new CompanyNotFoundError(companyId);
+    }
+
+    const result = await this.database.query<CompanyProfileRow>(
+      `SELECT
+        c.company_id,
+        c.company_name,
+        c.address,
+        c.description,
+        c.capital,
+        c.foundation_date,
+        c.url,
+        i.industry_name,
+        COUNT(r.release_id) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        )::text AS release_count,
+        MAX(r.created_at) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        ) AS last_published_at
+      FROM company AS c
+      INNER JOIN industry AS i ON i.industry_id = c.industry_id
+      LEFT JOIN release AS r ON r.company_id = c.company_id
+      WHERE c.company_id = $1
+      GROUP BY
+        c.company_id,
+        c.company_name,
+        c.address,
+        c.description,
+        c.capital,
+        c.foundation_date,
+        c.url,
+        i.industry_name`,
+      [numericCompanyId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new CompanyNotFoundError(companyId);
+    return {
+      company: toCompany(row),
+      stats: {
+        releaseCount: Number(row.release_count),
+        lastPublishedAt: row.last_published_at?.toISOString() ?? null,
+      },
+    };
+  }
+
   async listCompanies(): Promise<CompanySummary[]> {
     const result = await this.database.query<CompanySummaryRow>(
       `SELECT
         c.company_id,
         c.company_name,
+        c.capital,
         i.industry_name,
         COUNT(r.release_id) FILTER (
           WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
-        )::text AS release_count
+        )::text AS release_count,
+        MAX(r.created_at) FILTER (
+          WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
+        ) AS last_published_at
       FROM company AS c
       INNER JOIN industry AS i ON i.industry_id = c.industry_id
       LEFT JOIN release AS r ON r.company_id = c.company_id
-      GROUP BY c.company_id, c.company_name, i.industry_name
+      GROUP BY c.company_id, c.company_name, c.capital, i.industry_name
       HAVING COUNT(r.release_id) FILTER (
         WHERE r.created_at IS NOT NULL AND r.created_at <= CURRENT_TIMESTAMP
       ) > 0
@@ -242,6 +306,9 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       initials: initialsFor(row.company_name),
       industry: row.industry_name,
       releaseCount: Number(row.release_count),
+      lastPublishedAt: row.last_published_at.toISOString(),
+      hasCachedRecommendation: false,
+      isSmeByCapital: isSmeByCapital(row.industry_name, Number(row.capital)),
     }));
   }
 }

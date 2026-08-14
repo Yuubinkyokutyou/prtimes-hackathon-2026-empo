@@ -1,6 +1,19 @@
 name: team-empo
 
 services:
+  clear-recommendation-cache:
+    profiles: ["operations"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    entrypoint: ["node", "backend/dist/clearRecommendationCache.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_SSL: ${DATABASE_SSL:-true}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: ${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}
+
   migrate:
     build:
       context: .
@@ -33,7 +46,6 @@ services:
       OPENAI_TIMEOUT_MS: ${OPENAI_TIMEOUT_MS:-300000}
       RECOMMENDATION_DATA_SOURCE: ${RECOMMENDATION_DATA_SOURCE:-database}
       PRODUCTION_SUBSET_DIRECTORY: ${PRODUCTION_SUBSET_DIRECTORY:-}
-      RECOMMENDATION_CACHE_TTL_MS: ${RECOMMENDATION_CACHE_TTL_MS:-900000}
       RECOMMENDATION_STALE_AFTER_DAYS: ${RECOMMENDATION_STALE_AFTER_DAYS:-60}
       RECOMMENDATION_STORAGE_ENABLED: ${RECOMMENDATION_STORAGE_ENABLED:-true}
     depends_on:

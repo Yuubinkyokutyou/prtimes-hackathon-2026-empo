@@ -2,7 +2,23 @@
 
 React + Node.js/TypeScript + PostgreSQL で構成したアプリケーションです。
 
+ダッシュボード上部のレコメンド導線については、[機能解説ドキュメント](docs/dashboard-recommendation-banner.md)を参照してください。
+
 過去のプレスリリースをもとにした次回企画と、まだ発信していない企業の魅力を発見する企画を提案するダッシュボードです。OpenAI API キー未設定時も、選択したデータソースの企業情報と配信実績からテンプレートで提案を作成します。
+
+## Codex App の worktree セットアップ
+
+Codex App が作る managed worktree では、リポジトリ直下の `.worktreeinclude` により、Git 管理外の `.env` がメイン checkout から自動コピーされます。コピー元の `.env` がない場合、セットアップスクリプトは `.env.example` から作成します。
+
+Codex App で一度だけ **Settings > Local environments** を開き、このプロジェクト用の環境を次の内容で保存してください。以後、この環境を選んで worktree のチャットを作ると setup script が自動実行されます。
+
+- Setup script（Windows / macOS / Linux 共通）: `npm run codex:setup`
+- Run action: `npm run dev:worktree`
+- Status action: `npm run dev:worktree:status`
+- Logs action: `npm run dev:worktree:logs`
+- Stop action: `npm run dev:worktree:down`
+
+`Run` は worktree ごとに Compose プロジェクト、ボリューム、PostgreSQL / API / frontend の空きポートを割り当てます。同時起動でポートが先に使われた場合も、別ポートで最大3回再試行します。割り当て結果は Git 管理外の `.worktree-dev.json` に保存されます。
 
 ## 必要なもの
 
@@ -10,6 +26,22 @@ React + Node.js/TypeScript + PostgreSQL で構成したアプリケーション�
 - Docker を使わず動かす場合は Node.js 22 と PostgreSQL 16
 
 ## ローカル開発（推奨）
+
+worktree では、次のコマンドを使うと専用の Compose プロジェクト名・ボリューム・空きポートを自動で割り当てます。割り当てた URL は `.worktree-dev.json` に保存され、同じ worktree では再利用されます。
+
+```bash
+npm run dev:worktree
+```
+
+起動状態の確認・ログ表示・停止も worktree 単位で行えます。
+
+```bash
+npm run dev:worktree:status
+npm run dev:worktree:logs
+npm run dev:worktree:down
+```
+
+通常の固定ポートで起動する場合は、従来どおり次を使います。
 
 ```bash
 cp .env.example .env
@@ -41,6 +73,7 @@ npm run dev
 
 ```bash
 npm run dev        # frontend / backend を同時起動
+npm run dev:worktree # worktree専用の空きポートでDocker環境を起動
 npm run build      # 両方をビルド
 npm run migrate    # アプリ用DBマイグレーションを適用
 npm run typecheck  # TypeScript の型検査
@@ -72,11 +105,12 @@ AWS リソースの作成、セキュリティグループ、Amazon Linux 2023 �
 | `OPENAI_TIMEOUT_MS` | OpenAI API のタイムアウト（ms） | `300000` |
 | `RECOMMENDATION_DATA_SOURCE` | データ取得元（`production_subset` / `auto` / `database`） | `production_subset` |
 | `PRODUCTION_SUBSET_DIRECTORY` | production_subset CSVディレクトリ | `database/production_subset/csv` |
-| `RECOMMENDATION_CACHE_TTL_MS` | 生成結果のキャッシュ時間（ms） | `900000` |
 | `RECOMMENDATION_STALE_AFTER_DAYS` | 左側の過去記事活用案を優先する最終投稿日からの日数 | `60` |
 | `RECOMMENDATION_STORAGE_ENABLED` | 生成結果・履歴・編集内容をPostgreSQLへ保存 | `true` |
 
-OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、結果を15分間キャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、同じ企業・条件の結果はプロセス再起動後もTTL内なら再利用されます。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+OpenAI API キーはバックエンドだけが参照します。フロントエンド用の `VITE_` 変数には入れないでください。初回アクセス時に構造化出力で企画文を生成し、同じ企業・条件の結果は期限なくキャッシュします。提案と生成履歴は `recommendation_generation` テーブルへ永続化され、プロセス再起動後も再利用されます。明示的な再生成操作はキャッシュを使わず、新しい提案を生成します。過去記事・他社事例・提案文は Embedding に変換し、コサイン類似度を使って参考事例の抽出と提案順の決定を行います。類似度は内部評価にのみ使用し、画面には表示しません。
+
+EC2/RDS本番環境の全提案キャッシュをクリアする場合は、リポジトリのルートで `./scripts/clear-recommendation-cache-production.sh --yes` を実行します。生成履歴は保持されます。
 
 ## データソース
 

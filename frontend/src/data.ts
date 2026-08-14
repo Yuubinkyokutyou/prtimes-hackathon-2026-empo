@@ -21,6 +21,7 @@ export type ExistingSuggestion = {
   sourceTitle: string;
   sourceReleaseId?: string;
   sourceUrl: string;
+  sourceImageUrl: string;
   similarity: number;
 };
 
@@ -53,6 +54,7 @@ export type SourceReleaseSummary = {
   title: string;
   publishedAt: string;
   sourceUrl: string;
+  imageUrl: string;
   pageView: number;
 };
 
@@ -103,4 +105,18 @@ export type RecommendationHistoryItem = {
 
 export type CompanySummary = Pick<CompanyProfile, 'id' | 'name' | 'initials' | 'industry'> & {
   releaseCount: number;
+  lastPublishedAt: string;
+  hasCachedRecommendation: boolean;
+  isSmeByCapital: boolean;
+};
+
+export type RecommendationCompanyProfile = {
+  company: CompanyProfile;
+  stats: {
+    releaseCount: number;
+    lastPublishedAt: string | null;
+  };
+  meta: {
+    dataSource: 'production_subset' | 'database';
+  };
 };

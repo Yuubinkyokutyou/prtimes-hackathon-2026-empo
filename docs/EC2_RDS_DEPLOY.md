@@ -296,6 +296,16 @@ docker compose --env-file .env.ec2 -f compose.ec2.yaml logs -f backend
 docker compose --env-file .env.ec2 -f compose.ec2.yaml down
 ```
 
+## 提案キャッシュのクリア
+
+全企業の提案キャッシュを無効化し、バックエンドのメモリキャッシュも消去する場合は、リポジトリのルートで次を実行します。
+
+```bash
+./scripts/clear-recommendation-cache-production.sh --yes
+```
+
+このコマンドはRDS上の生成履歴を削除しません。キャッシュの基準時刻を更新した後にbackendコンテナを再起動します。次に提案を開いた企業から、新しい提案が生成・キャッシュされます。`--yes` を省略した場合は何も変更せず終了します。
+
 ## よくあるエラー
 
 ### `connect ETIMEDOUT` / `Connection timed out`

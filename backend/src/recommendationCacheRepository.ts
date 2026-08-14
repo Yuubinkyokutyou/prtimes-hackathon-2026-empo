@@ -38,8 +38,18 @@ export function ensureRecommendationStorage(): Promise<void> {
       ON recommendation_generation (cache_key, expires_at DESC)
     `);
     await pool.query(`
+      CREATE INDEX IF NOT EXISTS recommendation_generation_cache_latest_idx
+      ON recommendation_generation (cache_key, created_at DESC)
+    `);
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS recommendation_generation_company_idx
       ON recommendation_generation (company_id, created_at DESC)
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recommendation_cache_state (
+        singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+        invalidated_at timestamptz NOT NULL DEFAULT '-infinity'::timestamptz
+      )
     `);
   })();
   return schemaPromise;
@@ -52,7 +62,11 @@ export async function findCachedRecommendation(
   const result = await pool.query<{ dashboard: RecommendationDashboard }>(
     `SELECT dashboard
      FROM recommendation_generation
-     WHERE cache_key = $1 AND expires_at > CURRENT_TIMESTAMP
+     WHERE cache_key = $1
+       AND created_at > COALESCE(
+         (SELECT invalidated_at FROM recommendation_cache_state WHERE singleton = true),
+         '-infinity'::timestamptz
+       )
      ORDER BY created_at DESC
      LIMIT 1`,
     [cacheKey],
@@ -61,18 +75,42 @@ export async function findCachedRecommendation(
   return dashboard ? parseRecommendationDashboard(dashboard) : undefined;
 }
 
+export async function listCachedRecommendationKeys(): Promise<Set<string>> {
+  await ensureRecommendationStorage();
+  const result = await pool.query<{ cache_key: string }>(
+    `SELECT DISTINCT cache_key
+     FROM recommendation_generation
+     WHERE created_at > COALESCE(
+       (SELECT invalidated_at FROM recommendation_cache_state WHERE singleton = true),
+       '-infinity'::timestamptz
+     )`,
+  );
+  return new Set(result.rows.map((row) => row.cache_key));
+}
+
+export async function invalidateRecommendationCache(): Promise<Date> {
+  await ensureRecommendationStorage();
+  const result = await pool.query<{ invalidated_at: Date }>(
+    `INSERT INTO recommendation_cache_state (singleton, invalidated_at)
+     VALUES (true, CURRENT_TIMESTAMP)
+     ON CONFLICT (singleton) DO UPDATE
+       SET invalidated_at = EXCLUDED.invalidated_at
+     RETURNING invalidated_at`,
+  );
+  return result.rows[0]!.invalidated_at;
+}
+
 export async function insertRecommendationGeneration(
   cacheKey: string,
   companyId: string,
   dashboard: RecommendationDashboard,
   conditions: RecommendationGenerationOptions,
-  ttlMs: number,
 ): Promise<void> {
   await ensureRecommendationStorage();
   await pool.query(
     `INSERT INTO recommendation_generation
       (id, cache_key, company_id, dashboard, conditions, saved, expires_at)
-     VALUES ($1::uuid, $2, $3, $4::jsonb, $5::jsonb, $6, CURRENT_TIMESTAMP + ($7 * INTERVAL '1 millisecond'))`,
+     VALUES ($1::uuid, $2, $3, $4::jsonb, $5::jsonb, $6, 'infinity'::timestamptz)`,
     [
       dashboard.meta.generationId,
       cacheKey,
@@ -80,7 +118,6 @@ export async function insertRecommendationGeneration(
       JSON.stringify(dashboard),
       JSON.stringify(conditions),
       dashboard.meta.saved,
-      ttlMs,
     ],
   );
 }
