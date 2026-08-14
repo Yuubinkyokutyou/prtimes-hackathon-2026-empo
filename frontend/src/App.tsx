@@ -914,7 +914,6 @@ function HeaderCompanySwitcher({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [staleOnly, setStaleOnly] = useState(false);
-  const [cachedOnly, setCachedOnly] = useState(true);
   const [smeOnly, setSmeOnly] = useState(false);
   const selected = companies.find((company) => company.id === selectedCompanyId) ?? companies[0];
   const filteredCompanies = useMemo(() => {
@@ -922,14 +921,14 @@ function HeaderCompanySwitcher({
     return companies.filter((company) => {
       const staleDays = daysSince(company.lastPublishedAt);
       const matchesStale = !staleOnly || (staleDays !== null && staleDays >= 30);
-      const matchesCache = !cachedOnly || company.hasCachedRecommendation;
+      const matchesCache = company.hasCachedRecommendation;
       const matchesSme = !smeOnly || company.isSmeByCapital;
       const matchesQuery = !normalized || `${company.name} ${company.industry} ${company.id}`
         .toLocaleLowerCase('ja-JP')
         .includes(normalized);
       return matchesStale && matchesCache && matchesSme && matchesQuery;
     }).slice(0, 100);
-  }, [cachedOnly, companies, query, smeOnly, staleOnly]);
+  }, [companies, query, smeOnly, staleOnly]);
 
   return (
     <div className="pr-company-switcher">
@@ -981,13 +980,13 @@ function HeaderCompanySwitcher({
             <fieldset className="pr-company-menu__filters">
               <legend>絞り込み</legend>
               <button
-                onClick={() => { setCachedOnly(true); setSmeOnly(false); setStaleOnly(false); }}
+                onClick={() => { setSmeOnly(false); setStaleOnly(false); }}
                 type="button"
               >
                 初期状態に戻す
               </button>
               <label className="pr-company-menu__filter">
-                <input checked={cachedOnly} onChange={(event) => setCachedOnly(event.target.checked)} type="checkbox" />
+                <input checked disabled type="checkbox" />
                 <span>提案キャッシュあり</span>
                 <small>{companies.filter((company) => company.hasCachedRecommendation).length}社</small>
               </label>
