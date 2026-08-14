@@ -10,7 +10,7 @@ async function main(): Promise<void> {
 
   const invalidatedAt = await invalidateRecommendationCache();
   console.log(`Recommendation cache invalidated at ${invalidatedAt.toISOString()}.`);
-  console.log('Generation history was preserved. Restart the backend to clear its memory cache.');
+  console.log('Generation history was preserved.');
 }
 
 main()
