@@ -316,6 +316,22 @@ function PitchModal({
           </div>
         </div>
 
+        {opportunity.sourceTitle && (
+          <div className="detail-modal__source">
+            <span>
+              着想に使った同業界の他社記事
+              {opportunity.sourcePageView > 0 && `・${new Intl.NumberFormat('ja-JP').format(opportunity.sourcePageView)}PV`}
+            </span>
+            {opportunity.sourceUrl
+              ? (
+                <a href={opportunity.sourceUrl} target="_blank" rel="noreferrer">
+                  {opportunity.sourceCompanyName}｜{opportunity.sourceTitle} <Icon name="arrow" size={14} />
+                </a>
+              )
+              : <strong>{opportunity.sourceCompanyName}｜{opportunity.sourceTitle}</strong>}
+          </div>
+        )}
+
         <button className="primary-button primary-button--wide" onClick={() => onCopy(opportunity)} type="button">
           提案文をコピーする <Icon name="check" />
         </button>
@@ -508,6 +524,9 @@ function RecommendationApp({
       '',
       'おすすめ構成案・具体例',
       ...opportunity.contentOutline.map((item, index) => `${index + 1}. ${item}`),
+      ...(opportunity.sourceTitle
+        ? ['', `着想元：${opportunity.sourceCompanyName}｜${opportunity.sourceTitle}`, opportunity.sourceUrl]
+        : []),
     ].join('\n');
     try {
       const copied = await writeToClipboard(copyText);
@@ -810,7 +829,7 @@ function RecommendationApp({
               )}
             </div>
             <h2>新しい切り口を見つける</h2>
-            <p className="discovery-panel__intro">過去の発信にはなかった、新しい切り口を見つけました。</p>
+            <p className="discovery-panel__intro">同業界で読まれている他社記事を参考に、自社で展開できる新しい切り口を見つけました。</p>
 
             <div className="opportunity-list">
               {dashboard.newOpportunities.slice(0, visibleOpportunityCount).map((opportunity) => (
@@ -819,6 +838,24 @@ function RecommendationApp({
                   <p className="micro-label micro-label--light">{opportunity.eyebrow}</p>
                   <h3>{opportunity.title}</h3>
                   <p>{opportunity.summary}</p>
+                  {opportunity.sourceTitle && (
+                    <div className="opportunity-card__source">
+                      <Icon name="file" size={15} />
+                      <div>
+                        <span>
+                          同業界の参考記事
+                          {opportunity.sourcePageView > 0 && `・${new Intl.NumberFormat('ja-JP').format(opportunity.sourcePageView)}PV`}
+                        </span>
+                        {opportunity.sourceUrl
+                          ? (
+                            <a href={opportunity.sourceUrl} target="_blank" rel="noreferrer">
+                              {opportunity.sourceCompanyName}｜{opportunity.sourceTitle} <Icon name="arrow" size={13} />
+                            </a>
+                          )
+                          : <strong>{opportunity.sourceCompanyName}｜{opportunity.sourceTitle}</strong>}
+                      </div>
+                    </div>
+                  )}
                   <button className="opportunity-card__detail" onClick={() => setSelectedOpportunity(opportunity)} type="button">
                     企画の詳細を見る <Icon name="arrow" size={16} />
                   </button>
@@ -843,7 +880,7 @@ function RecommendationApp({
 
         <footer className="site-footer">
           <Brand />
-          <p><Icon name="sparkles" size={14} /> 提案は過去の配信・企業情報をもとにAIが作成しています。公開前に事実確認を行ってください。</p>
+          <p><Icon name="sparkles" size={14} /> 01は自社の過去配信、02は同業界の参考記事をもとに作成しています。公開前に事実確認を行ってください。</p>
           <span className={`engine-badge engine-badge--${dashboard.meta.mode}`}>
             <i />
             {loading ? '提案を準備中…' : dashboard.meta.mode === 'openai' ? 'OpenAI 生成済み' : 'テンプレート生成済み'}

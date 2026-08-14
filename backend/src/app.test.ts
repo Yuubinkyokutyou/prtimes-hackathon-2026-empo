@@ -56,7 +56,16 @@ test('GET /api/recommendations uses the configured CSV data source', async () =>
     company: { name: string };
     sourceReleases: Array<{ id: string; title: string; publishedAt: string }>;
     existingSuggestions: Array<{ title: string; summary: string; sourceEvidence?: string }>;
-    newOpportunities: Array<{ genre: string; title: string; summary: string; pitch: string; interviewQuestions?: string[] }>;
+    newOpportunities: Array<{
+      genre: string;
+      title: string;
+      summary: string;
+      pitch: string;
+      sourceCompanyName: string;
+      sourceTitle: string;
+      sourceUrl: string;
+      interviewQuestions?: string[];
+    }>;
     meta: { dataSource: string; mode: string; generationId: string; saved: boolean };
   };
   assert.equal(data.company.name, '株式会社テスト空');
@@ -64,6 +73,9 @@ test('GET /api/recommendations uses the configured CSV data source', async () =>
   assert.equal(data.sourceReleases.length, 1);
   assert.equal(data.newOpportunities.length, 3);
   assert.equal(data.newOpportunities[0]?.genre, '人・カルチャー');
+  assert.equal(data.newOpportunities[0]?.sourceCompanyName, '株式会社テスト森');
+  assert.equal(data.newOpportunities[0]?.sourceTitle, '地域交流会を開催');
+  assert.equal(data.newOpportunities[0]?.sourceUrl, 'https://example.org/releases/20');
   const recommendationCopy = [
     ...data.existingSuggestions.flatMap((item) => [item.title, item.summary]),
     ...data.newOpportunities.flatMap((item) => [item.title, item.summary, item.pitch]),
@@ -201,10 +213,16 @@ test('POST /api/recommendations/regenerate-item replaces only the requested laye
     }),
   });
   assert.equal(newResponse.status, 200);
-  const regenerated = (await newResponse.json()) as { layer: string; mode: string; item: { title: string } };
+  const regenerated = (await newResponse.json()) as {
+    layer: string;
+    mode: string;
+    item: { title: string; sourceCompanyName: string; sourceUrl: string };
+  };
   assert.equal(regenerated.layer, 'new');
   assert.equal(regenerated.mode, 'template');
   assert(!dashboard.newOpportunities.some((item) => item.title === regenerated.item.title));
+  assert.equal(regenerated.item.sourceCompanyName, '株式会社テスト森');
+  assert.equal(regenerated.item.sourceUrl, 'https://example.org/releases/20');
 });
 
 test('POST /api/recommendations/export/docx is no longer available', async () => {

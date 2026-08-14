@@ -25,7 +25,9 @@ test('production_subset provider loads companies, releases, and candidates from 
   const context = await provider.get(companies[0]!.id);
   assert.equal(context.company.id, companies[0]!.id);
   assert(context.pastReleases.length > 0);
-  assert(context.candidateReleases.length > 0);
+  assert.equal(context.candidateReleases.length, 1);
+  assert.equal(context.candidateReleases[0]?.companyName, '株式会社テスト森');
+  assert.equal(context.candidateReleases[0]?.sourceUrl, 'https://example.org/releases/20');
   assert(Number.isFinite(Date.parse(context.pastReleases[0]!.publishedAt)));
 
   const profile = await provider.getCompanyProfile(companies[0]!.id);

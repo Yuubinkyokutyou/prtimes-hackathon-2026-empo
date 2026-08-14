@@ -25,6 +25,7 @@ export type PastRelease = {
 };
 
 export type SimilarRelease = PastRelease & {
+  companyId: string;
   companyName: string;
 };
 
@@ -66,6 +67,11 @@ export type NewOpportunity = {
   opportunityReason: string;
   pitch: string;
   contentOutline: string[];
+  sourceCompanyName: string;
+  sourceTitle: string;
+  sourceReleaseId: string;
+  sourceUrl: string;
+  sourcePageView: number;
 };
 
 export type SourceReleaseSummary = Pick<

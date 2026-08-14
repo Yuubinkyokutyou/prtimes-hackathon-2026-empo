@@ -232,7 +232,9 @@ function genericSuggestions(context: RecommendationContext): ExistingSuggestion[
 function genericNewOpportunities(context: RecommendationContext): NewOpportunity[] {
   const genres = Array.from(new Set(context.pastReleases.map((release) => release.genre))).join('・');
   const reason = `過去配信は${genres || '商品・サービス'}が中心です。商品紹介と重なりにくく、会社の普段の姿を伝えられる切り口です。`;
-  return [
+  const drafts: Array<Omit<NewOpportunity,
+    'sourceCompanyName' | 'sourceTitle' | 'sourceReleaseId' | 'sourceUrl' | 'sourcePageView'
+  >> = [
     {
       id: 'people-behind-company',
       genre: '人・カルチャー',
@@ -309,6 +311,36 @@ function genericNewOpportunities(context: RecommendationContext): NewOpportunity
       ],
     },
   ];
+
+  return drafts.map((draft, index) => {
+    const source = context.candidateReleases[index % Math.max(context.candidateReleases.length, 1)];
+    if (!source) {
+      return {
+        ...draft,
+        sourceCompanyName: '',
+        sourceTitle: '',
+        sourceReleaseId: '',
+        sourceUrl: '',
+        sourcePageView: 0,
+      };
+    }
+    const sourceTitle = compactReleaseTitle(source.title, 52);
+    const pvText = source.pageView > 0
+      ? `${new Intl.NumberFormat('ja-JP').format(source.pageView)}PVの`
+      : '';
+    return {
+      ...draft,
+      eyebrow: '同業界の参考記事から着想',
+      opportunityReason:
+        `${source.companyName}の${pvText}記事「${sourceTitle}」を参考にした切り口です。` +
+        `${draft.opportunityReason}`,
+      sourceCompanyName: source.companyName,
+      sourceTitle: source.title,
+      sourceReleaseId: source.id,
+      sourceUrl: source.sourceUrl,
+      sourcePageView: source.pageView,
+    };
+  });
 }
 
 function cadenceFor(
@@ -380,6 +412,7 @@ const generatedPayloadSchema = z.object({
     opportunityReason: z.string(),
     pitch: z.string(),
     contentOutline: z.array(z.string().min(20)).min(4).max(4),
+    sourceReferenceId: z.string(),
   })).min(3).max(3),
 });
 
@@ -429,6 +462,7 @@ const responseJsonSchema = {
           'opportunityReason',
           'pitch',
           'contentOutline',
+          'sourceReferenceId',
         ],
         properties: {
           id: { type: 'string' },
@@ -438,6 +472,7 @@ const responseJsonSchema = {
           summary: { type: 'string' },
           opportunityReason: { type: 'string' },
           pitch: { type: 'string' },
+          sourceReferenceId: { type: 'string' },
           contentOutline: {
             type: 'array',
             minItems: 4,
@@ -467,6 +502,7 @@ const regeneratedNewSchema = z.object({
   opportunityReason: z.string(),
   pitch: z.string(),
   contentOutline: z.array(z.string().min(20)).min(4).max(4),
+  sourceReferenceId: z.string(),
 });
 
 const regeneratedExistingJsonSchema = {
@@ -488,7 +524,7 @@ const regeneratedExistingJsonSchema = {
 const regeneratedNewJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['genre', 'eyebrow', 'title', 'summary', 'opportunityReason', 'pitch', 'contentOutline'],
+  required: ['genre', 'eyebrow', 'title', 'summary', 'opportunityReason', 'pitch', 'contentOutline', 'sourceReferenceId'],
   properties: {
     genre: { type: 'string' },
     eyebrow: { type: 'string' },
@@ -496,6 +532,7 @@ const regeneratedNewJsonSchema = {
     summary: { type: 'string' },
     opportunityReason: { type: 'string' },
     pitch: { type: 'string' },
+    sourceReferenceId: { type: 'string' },
     contentOutline: {
       type: 'array', minItems: 4, maxItems: 4, items: { type: 'string', minLength: 20 },
     },
@@ -504,8 +541,28 @@ const regeneratedNewJsonSchema = {
 
 type RankedSimilarRelease = Pick<
   SimilarRelease,
-  'companyName' | 'title' | 'genre' | 'summary' | 'pageView' | 'likeCount'
-> & { similarity: number };
+  'companyId' | 'companyName' | 'id' | 'title' | 'genre' | 'summary' | 'pageView' | 'likeCount' | 'sourceUrl'
+> & { sourceReferenceId: string; similarity: number };
+
+function opportunityFromGenerated(
+  generated: Omit<NewOpportunity,
+    'sourceCompanyName' | 'sourceTitle' | 'sourceReleaseId' | 'sourceUrl' | 'sourcePageView'
+  > & { sourceReferenceId: string },
+  sources: RankedSimilarRelease[],
+  fallbackIndex: number,
+): NewOpportunity {
+  const { sourceReferenceId, ...opportunity } = generated;
+  const source = sources.find((candidate) => candidate.sourceReferenceId === sourceReferenceId)
+    ?? sources[fallbackIndex % Math.max(sources.length, 1)];
+  return {
+    ...opportunity,
+    sourceCompanyName: source?.companyName ?? '',
+    sourceTitle: source?.title ?? '',
+    sourceReleaseId: source?.id ?? '',
+    sourceUrl: source?.sourceUrl ?? '',
+    sourcePageView: source?.pageView ?? 0,
+  };
+}
 
 async function generateCopy(
   context: RecommendationContext,
@@ -538,7 +595,7 @@ async function generateCopy(
           {
             type: 'input_text',
             text:
-              'あなたは中小企業の広報担当と一緒に企画会議をする編集者です。完成原稿ではなく、担当者がそのまま会議に出せる簡潔な企画メモを書いてください。自社の過去配信を活かした企画4件と、過去に扱っていないテーマの企画3件を日本語で提案します。3件の新規企画は互いに異なるジャンルと取材対象にしてください。recommendedFocusがexistingなら過去記事の続報を優先し、newなら既存記事と内容が重ならない企画にします。generationConditionsの読者・目的・文体・追加情報を反映してください。タイトルは25〜55文字を目安に、誰の何を扱う記事かが一読で分かる普通の日本語にします。「物語」「舞台裏」「ひもとく」「新たな可能性」「未来への一歩」「挑戦」「想い」「価値を届ける」「会社らしさ」「〜なのでしょうか」などの抽象的な決まり文句や、過度な体言止め、煽り表現は使いません。元記事のタイトルをそのまま長く連結せず、必要な主題だけを短く使います。summaryは誰に何を聞くかを1〜2文、whyNowとopportunityReasonは入力中の具体的な根拠を1つ挙げて短く書きます。pitchは社内の同僚へ説明するような自然な2〜3文にします。各contentOutlineは「見出し｜記事に入れる内容」の形式とし、「紹介します」「具体化します」を繰り返さず、取材で確認する内容を具体的に書きます。自社データにない実績・制度・人数・顧客の声は作らず、未確認情報は断定しません。既存企画は実在するsourceReleaseIdを1つずつ指定し、できるだけ異なる過去配信を使います。他社事例は切り口の参考に限り、その社名・商品名・実績を自社の事実にしません。',
+              'あなたは中小企業の広報担当と一緒に企画会議をする編集者です。完成原稿ではなく、担当者がそのまま会議に出せる簡潔な企画メモを書いてください。自社の過去配信を活かした企画4件と、過去に扱っていないテーマの企画3件を日本語で提案します。3件の新規企画は、similarExamplesにある同業界の他社記事から1件ずつ異なる記事を参考にし、そのsourceReferenceIdを必ず返してください。参考記事の切り口だけを自社向けに転換し、他社の社名・商品名・実績を自社の事実にしてはいけません。recommendedFocusがexistingなら過去記事の続報を優先し、newなら既存記事と内容が重ならない企画にします。generationConditionsの読者・目的・文体・追加情報を反映してください。タイトルは25〜55文字を目安に、誰の何を扱う記事かが一読で分かる普通の日本語にします。「物語」「舞台裏」「ひもとく」「新たな可能性」「未来への一歩」「挑戦」「想い」「価値を届ける」「会社らしさ」「〜なのでしょうか」などの抽象的な決まり文句や、過度な体言止め、煽り表現は使いません。元記事のタイトルをそのまま長く連結せず、必要な主題だけを短く使います。summaryは誰に何を聞くかを1〜2文、whyNowとopportunityReasonは入力中の具体的な根拠を1つ挙げて短く書きます。pitchは社内の同僚へ説明するような自然な2〜3文にします。各contentOutlineは「見出し｜記事に入れる内容」の形式とし、「紹介します」「具体化します」を繰り返さず、取材で確認する内容を具体的に書きます。自社データにない実績・制度・人数・顧客の声は作らず、未確認情報は断定しません。既存企画は実在するsourceReleaseIdを1つずつ指定し、できるだけ異なる過去配信を使います。',
           },
         ],
       },
@@ -615,6 +672,7 @@ async function generateExistingItemCopy(
 
 async function generateNewItemCopy(
   context: RecommendationContext,
+  similarExamples: RankedSimilarRelease[],
   options: RecommendationGenerationOptions,
   excludedTitles: string[],
 ) {
@@ -626,7 +684,7 @@ async function generateNewItemCopy(
         role: 'system',
         content: [{
           type: 'input_text',
-          text: 'あなたは中小企業の広報担当と企画を考える編集者です。過去配信と除外タイトルに重ならない、新しい切り口の企画を1件だけ作ってください。完成原稿ではなく簡潔な企画メモにします。タイトルは誰の何を扱うかが分かる普通の日本語にし、抽象的な決まり文句や未確認の実績は使いません。contentOutlineは「見出し｜記事に入れる内容」の形式で4件にしてください。',
+          text: 'あなたは中小企業の広報担当と企画を考える編集者です。過去配信と除外タイトルに重ならない、新しい切り口の企画を1件だけ作ってください。similarExamplesにある同業界の他社記事から1件を参考にし、そのsourceReferenceIdを返してください。他社の社名・商品名・実績は自社の事実にせず、切り口だけを自社向けに変換します。完成原稿ではなく簡潔な企画メモにします。タイトルは誰の何を扱うかが分かる普通の日本語にし、抽象的な決まり文句や未確認の実績は使いません。contentOutlineは「見出し｜記事に入れる内容」の形式で4件にしてください。',
         }],
       },
       {
@@ -638,6 +696,7 @@ async function generateNewItemCopy(
             pastReleases: context.pastReleases.slice(0, 20).map(({ title, genre, summary }) => ({ title, genre, summary })),
             excludedTitles,
             generationConditions: options,
+            similarExamples,
           }),
         }],
       },
@@ -730,7 +789,7 @@ function releaseEmbeddingText(release: PastRelease): string {
 
 async function rankSimilarExamples(context: RecommendationContext): Promise<RankedSimilarRelease[]> {
   const ownReleases = context.pastReleases.slice(0, 20);
-  const candidates = context.candidateReleases.slice(0, 80);
+  const candidates = context.candidateReleases.slice(0, 50);
   if (ownReleases.length === 0 || candidates.length === 0) return [];
 
   const vectors = await createCachedEmbeddings([
@@ -742,12 +801,16 @@ async function rankSimilarExamples(context: RecommendationContext): Promise<Rank
 
   return candidates
     .map((release, index) => ({
+      companyId: release.companyId,
       companyName: release.companyName,
+      id: release.id,
       title: release.title,
       genre: release.genre,
       summary: release.summary,
       pageView: release.pageView,
       likeCount: release.likeCount,
+      sourceUrl: release.sourceUrl,
+      sourceReferenceId: `${release.companyId}:${release.id}`,
       similarity: Math.round(
         Math.max(...ownVectors.map((ownVector) => cosineSimilarity(ownVector, candidateVectors[index] ?? []))) * 100,
       ),
@@ -762,7 +825,7 @@ let storageWarningLogged = false;
 function cacheKeyFor(companyId: string, options: RecommendationGenerationOptions): string {
   const digest = createHash('sha256')
     .update(JSON.stringify({
-      version: 5,
+      version: 6,
       companyId,
       options,
       dataSource: config.RECOMMENDATION_DATA_SOURCE,
@@ -983,12 +1046,15 @@ async function generateDashboard(
         };
       })
       .sort((left, right) => right.similarity - left.similarity);
+    const newOpportunities = generated.newOpportunities.map((opportunity, index) =>
+      opportunityFromGenerated(opportunity, similarExamples, index),
+    );
     const dashboard: RecommendationDashboard = {
       company: loaded.context.company,
       stats: dashboardStats(loaded.context),
       sourceReleases: sourceReleases(loaded.context),
       existingSuggestions,
-      newOpportunities: generated.newOpportunities,
+      newOpportunities,
       meta: {
         generatedAt: new Date().toISOString(),
         mode: 'openai',
@@ -1078,8 +1144,13 @@ export async function regenerateRecommendationItem(companyId: string, input: unk
   }
 
   try {
-    const generated = await generateNewItemCopy(loaded.context, options, excludedTitles);
-    const item: NewOpportunity = { ...generated, id: `new-${randomUUID()}` };
+    const similarExamples = await rankSimilarExamples(loaded.context);
+    const generated = await generateNewItemCopy(loaded.context, similarExamples, options, excludedTitles);
+    const item = opportunityFromGenerated(
+      { ...generated, id: `new-${randomUUID()}` },
+      similarExamples,
+      0,
+    );
     return { layer: 'new' as const, item, mode: 'openai' as const, generatedAt };
   } catch (error) {
     console.error('New recommendation item regeneration failed; serving a template item.', error);
