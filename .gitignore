@@ -14,3 +14,4 @@ coverage/
 
 # Production-derived local data. Keep the import tooling, but never commit the CSV contents.
 database/production_subset/csv/
+backend/src/testFixtures/production-subset/
