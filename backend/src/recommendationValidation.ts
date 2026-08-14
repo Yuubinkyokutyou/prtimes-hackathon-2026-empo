@@ -32,6 +32,11 @@ const newOpportunitySchema = z.object({
   opportunityReason: z.string().max(8_000),
   pitch: z.string().max(12_000),
   contentOutline: z.array(z.string().max(4_000)).max(20),
+  sourceCompanyName: z.string().max(500).optional().default(''),
+  sourceTitle: z.string().max(1_000).optional().default(''),
+  sourceReleaseId: z.string().max(100).optional().default(''),
+  sourceUrl: z.string().max(2_000).optional().default(''),
+  sourcePageView: z.number().nonnegative().optional().default(0),
 });
 
 export const recommendationDashboardSchema = z.object({

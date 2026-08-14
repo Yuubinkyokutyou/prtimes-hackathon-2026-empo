@@ -216,10 +216,13 @@ implements RecommendationContextProvider {
     if (!company || ownReleases.length === 0) throw new CompanyNotFoundError(companyId);
 
     const candidateReleases = loaded.releases
-      .filter((release) => release.companyId !== companyId)
+      .filter((release) =>
+        release.companyId !== companyId &&
+        loaded.companies.get(release.companyId)?.industry === company.industry,
+      )
       .sort((left, right) => right.pageView - left.pageView || Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
-      .slice(0, 120)
-      .map(({ companyId: _companyId, ...release }): SimilarRelease => release);
+      .slice(0, 50)
+      .map((release): SimilarRelease => structuredClone(release));
 
     return {
       company: structuredClone(company),

@@ -183,10 +183,15 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       this.database.query<ReleaseRow>(
         `${releaseSelect}
         WHERE r.company_id <> $1
+          AND c.industry_id = (
+            SELECT target_company.industry_id
+            FROM company AS target_company
+            WHERE target_company.company_id = $1
+          )
           AND r.created_at IS NOT NULL
           AND r.created_at <= CURRENT_TIMESTAMP
         ORDER BY COALESCE(rs.page_view, 0) DESC, r.created_at DESC
-        LIMIT 120`,
+        LIMIT 50`,
         [numericCompanyId],
       ),
     ]);
@@ -198,7 +203,11 @@ export class PostgresRecommendationContextProvider implements RecommendationCont
       company: toCompany(companyRow),
       pastReleases: ownReleaseResult.rows.map(toPastRelease),
       candidateReleases: candidateResult.rows.map(
-        (row): SimilarRelease => ({ ...toPastRelease(row), companyName: row.company_name }),
+        (row): SimilarRelease => ({
+          ...toPastRelease(row),
+          companyId: String(row.company_id),
+          companyName: row.company_name,
+        }),
       ),
     };
   }
